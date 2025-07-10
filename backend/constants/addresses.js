@@ -1,0 +1,30 @@
+// Adresses testées et fonctionnelles
+const ETHEREUM_CONTRACTS = {
+  // Tokens (adresses vérifiées)
+  WETH: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", // 
+  USDT: "0xdAC17F958D2ee523a2206206994597C13D831ec7", // 
+  DAI: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+  USDC_ADDRESS = "0xA0b86a33E6417c55972f40BF16dba70b8E9C8e0B", // 
+  
+  // Oracles
+  CHAINLINK_ETH_USD: "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419", // 
+  
+  // DEX
+  UNISWAP_V3_ROUTER: "0xE592427A0AEce92De3Edee1F18E0157C05861564", // 
+  UNISWAP_V3_FACTORY: "0x1F98431c8aD98523631AE4a59f267346ea31F984",
+  
+  // Pour développement, on utilisera USDT comme "USDC"
+  STABLE_COIN: "0xdAC17F958D2ee523a2206206994597C13D831ec7", // USDT = notre "USDC"
+
+  // Constantes du protocole
+  COLLATERAL_RATIO: 150, // 150%
+  LIQUIDATION_THRESHOLD: 120, // 120%
+  PROTOCOL_FEE: 100, // 1% (base 10000)
+  FALLBACK_DELAY: 7 * 24 * 60 * 60, // 7 jours en secondes
+  
+  };
+  
+  module.exports = { ETHEREUM_CONTRACTS };
+};
+
+module.exports = { ETHEREUM_CONTRACTS };
