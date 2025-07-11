@@ -29,16 +29,28 @@ module.exports = {
       chainId: 11155111
     },
     localhost: {
-      url: "http://127.0.0.1:8546",
+      url: "http://127.0.0.1:8545",
       chainId: 31337,
     },
     // Configuration hardhat pour fork Base
+    // hardhat: {
+    //   chainId: 8453, // Force Base chainId
+    //   forking: {
+    //     url: `https://base-mainnet.infura.io/v3/${INFURA_API_KEY}`,
+    //     blockNumber: 32680000, // Block fixe pour éviter trop de requêtes Infura
+    //   },
+    //   accounts: {
+    //     mnemonic: "test test test test test test test test test test test junk",
+    //     count: 20,
+    //     accountsBalance: "100000000000000000000000" // 100,000 ETH
+    //   },
+    //   allowUnlimitedContractSize: true,
+    //   blockGasLimit: 30000000,
+    //   gas: 30000000,
+    //   initialBaseFeePerGas: 0,
+    // }
     hardhat: {
-      chainId: 8453, // Force Base chainId
-      forking: {
-        url: `https://base-mainnet.infura.io/v3/${INFURA_API_KEY}`,
-        blockNumber: 32680000, // Block fixe pour éviter trop de requêtes Infura
-      },
+      chainId: 31337, // ChainId standard localhost
       accounts: {
         mnemonic: "test test test test test test test test test test test junk",
         count: 20,
@@ -48,7 +60,7 @@ module.exports = {
       blockGasLimit: 30000000,
       gas: 30000000,
       initialBaseFeePerGas: 0,
-    }
+    },
   },
   etherscan: {
     apiKey: ETHERSCAN
