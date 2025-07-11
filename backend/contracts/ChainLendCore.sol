@@ -93,7 +93,7 @@ contract ChainLendCore is Ownable, ReentrancyGuard {
     uint256 public constant PROTOCOL_FEE = 1000;               // 10% des intérêts
     uint256 public constant LIQUIDATION_BONUS = 400;           // 4% bonus liquidateur
     uint256 public constant LIQUIDATION_PROTOCOL_FEE = 100;    // 1% frais protocole liquidation
-    uint256 public constant STALENESS_THRESHOLD = 3600;        // 1 heure
+    uint256 public constant STALENESS_THRESHOLD = 86400;        // 24 heure
 
     uint256 public constant MIN_INTEREST_RATE = 500;           // 5%
     uint256 public constant MAX_INTEREST_RATE = 1500;          // 15%
