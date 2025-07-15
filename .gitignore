@@ -16,7 +16,6 @@ backend/ignition/deployments/chain-31337
 
 # Exclure les dossiers non désirés
 /frontend
-/backend/test
 /backend/scripts
 /backend/.env
 /frontend/.env
