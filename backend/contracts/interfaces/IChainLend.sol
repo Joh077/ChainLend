@@ -7,13 +7,9 @@ interface ICLToken {
 
 interface IChainLend {
     
-    // ========== ENUMS ==========
-    
     enum RequestStatus { Pending, Funded, Cancelled }
     
     enum LoanStatus { Active, Repaid, Liquidated }
-    
-    // ========== STRUCTS ==========
     
     struct LoanRequest {
         uint256 id;
@@ -37,8 +33,6 @@ interface IChainLend {
         uint64 interestAmount;
         LoanStatus status;
     }
-    
-    // ========== EVENTS ==========
 
     event LoanRequestCreated(
         uint256 indexed requestId, 
@@ -113,8 +107,7 @@ interface IChainLend {
 
     event CLRewardsClaimed(address indexed user, uint256 amount);
     
-    // ========== CONSTANTS ==========
-    
+
     function BASIS_POINTS() external view returns (uint256);
     function MIN_COLLATERAL_RATIO() external view returns (uint256);
     function LIQUIDATION_THRESHOLD() external view returns (uint256);
@@ -134,8 +127,7 @@ interface IChainLend {
     function REWARD_LIQUIDATE() external view returns (uint256);
     function MIN_CLAIM_AMOUNT() external view returns (uint256);
     
-    // ========== STATE VARIABLES ==========
-    
+
     function usdcToken() external view returns (address);
     function ethPriceFeed() external view returns (address);
     function usdcPriceFeed() external view returns (address);
@@ -174,160 +166,55 @@ interface IChainLend {
     function userLoanCount(address) external view returns (uint256);
     function pendingCLRewards(address) external view returns (uint256);
     
-    // ========== MAIN FUNCTIONS ==========
-    
-    /**
-     * @notice Calcule le collatéral requis pour un montant de prêt donné
-     * @param _loanAmount Montant du prêt en USDC
-     * @return Montant de collatéral requis en ETH
-     */
     function calculateRequiredCollateral(uint256 _loanAmount) external view returns (uint256);
 
-    /**
-     * @notice Crée une demande de prêt avec dépôt de collatéral
-     * @param _amountRequested Montant demandé en USDC
-     * @param _interestRate Taux d'intérêt annuel en points de base
-     * @param _duration Durée du prêt en secondes
-     */
     function createLoanRequest(
         uint256 _amountRequested, 
         uint32 _interestRate, 
         uint64 _duration
     ) external payable;
 
-    /**
-     * @notice Finance un prêt en tant que prêteur
-     * @param _requestId ID de la demande de prêt
-     */
     function fundLoan(uint256 _requestId) external;
 
-    /**
-     * @notice Ajoute du collatéral à un prêt actif
-     * @param _requestId ID du prêt
-     */
     function addCollateral(uint256 _requestId) external payable;
 
-    /**
-     * @notice Retire le collatéral excédentaire (au-dessus de 150%)
-     * @param _requestId ID du prêt
-     * @param _amount Montant à retirer
-     */
     function withdrawExcessCollateral(uint256 _requestId, uint256 _amount) external;
 
-    /**
-     * @notice Rembourse un prêt actif
-     * @param _requestId ID du prêt
-     */
     function repayLoan(uint256 _requestId) external;
 
-    /**
-     * @notice Retire le collatéral après remboursement du prêt
-     * @param _requestId ID du prêt
-     */
     function withdrawCollateral(uint256 _requestId) external;
 
-    /**
-     * @notice Annule une demande de prêt non financée
-     * @param _requestId ID de la demande
-     */
     function cancelLoanRequest(uint256 _requestId) external;
 
-    /**
-     * @notice Liquide un prêt sous-collatéralisé
-     * @param _requestId ID du prêt
-     */
     function liquidateCollateral(uint256 _requestId) external;
 
-    /**
-     * @notice Réclame les récompenses CL accumulées
-     */
     function claimCLRewards() external;
     
     // ========== VIEW FUNCTIONS ==========
 
-    /**
-     * @notice Retourne le health factor (ratio de collatéralisation) d'un prêt
-     * @param _requestId ID du prêt
-     * @return Ratio de collatéralisation en points de base
-     */
     function getHealthFactor(uint256 _requestId) external view returns (uint256);
 
-    /**
-     * @notice Vérifie si un prêt est à risque de liquidation
-     * @param _requestId ID du prêt
-     * @return atRisk True si le prêt est à risque
-     * @return currentRatio Ratio de collatéralisation actuel
-     */
     function isAtRiskOfLiquidation(uint256 _requestId) external view returns (bool atRisk, uint256 currentRatio);
 
-    /**
-     * @notice Calcule le montant de collatéral excédentaire pouvant être retiré
-     * @param _requestId ID du prêt
-     * @return excessAmount Montant excédentaire
-     */
     function getExcessCollateral(uint256 _requestId) external view returns (uint256 excessAmount);
 
-    /**
-     * @notice Retourne les détails d'une demande de prêt
-     * @param _requestId ID de la demande
-     * @return LoanRequest struct
-     */
     function getLoanRequest(uint256 _requestId) external view returns (LoanRequest memory);
 
-    /**
-     * @notice Retourne les détails d'un prêt actif
-     * @param _requestId ID du prêt
-     * @return ActiveLoan struct
-     */
     function getActiveLoan(uint256 _requestId) external view returns (ActiveLoan memory);
 
-    /**
-     * @notice Retourne la liste des demandes d'un utilisateur
-     * @param _user Adresse de l'utilisateur
-     * @return Array des IDs de demandes
-     */
     function getUserRequests(address _user) external view returns (uint256[] memory);
 
-    /**
-     * @notice Retourne la liste des prêts d'un utilisateur
-     * @param _user Adresse de l'utilisateur
-     * @return Array des IDs de prêts
-     */
     function getUserLoans(address _user) external view returns (uint256[] memory);
 
-    /**
-     * @notice Retourne les demandes en attente avec pagination
-     * @param _offset Décalage pour la pagination
-     * @param _limit Nombre maximum de résultats
-     * @return pendingIds Array des IDs en attente
-     * @return hasMore True s'il y a plus de résultats
-     */
     function getPendingRequests(uint256 _offset, uint256 _limit) 
         external view returns (uint256[] memory pendingIds, bool hasMore);
 
-    /**
-     * @notice Retourne le nombre total de demandes en attente
-     * @return count Nombre de demandes en attente
-     */
     function getPendingRequestsCount() external view returns (uint256 count);
 
-    /**
-     * @notice Vérifie si le collatéral peut être retiré
-     * @param _requestId ID du prêt
-     * @return canWithdraw True si le retrait est possible
-     * @return collateralAmount Montant de collatéral disponible
-     * @return reason Raison en cas d'impossibilité
-     */
     function canWithdrawCollateral(uint256 _requestId) 
         external view returns (bool canWithdraw, uint256 collateralAmount, string memory reason);
 
-    /**
-     * @notice Retourne les statistiques globales du protocole
-     * @return totalRequests Nombre total de demandes
-     * @return activeRequests Nombre de demandes actives
-     * @return activeLoansCount Nombre de prêts actifs
-     * @return totalVolumeUSDC Volume total en USDC
-     */
+
     function getProtocolStats() external view returns (
         uint256 totalRequests,
         uint256 activeRequests,
@@ -337,16 +224,8 @@ interface IChainLend {
     
     // ========== ADMIN FUNCTIONS ==========
 
-    /**
-     * @notice Met à jour l'adresse du treasury (admin seulement)
-     * @param _newTreasury Nouvelle adresse du treasury
-     */
     function updateTreasury(address _newTreasury) external;
 
-    /**
-     * @notice Retrait d'urgence d'USDC (admin seulement)
-     * @param _to Adresse de destination
-     * @param _amount Montant à retirer
-     */
+
     function emergencyWithdrawUSDC(address _to, uint256 _amount) external;
 }

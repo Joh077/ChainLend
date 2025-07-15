@@ -13,9 +13,7 @@
     "node": "npx hardhat node",
     "clean": "npx hardhat clean",
     "setup-test": "hardhat run scripts/setupTestData.js --network localhost",
-    "deploy:dev": "hardhat ignition deploy ignition/modules/ChainLendModule.js --network hardhat",
-    "deploy:localhost": "hardhat ignition deploy ignition/modules/ChainLendModule.js --network localhost",
-    "deploy:sepolia": "hardhat ignition deploy ignition/modules/ChainLendModule.js --network sepolia"
+    "deploy:dev": "hardhat ignition deploy ignition/modules/ChainLendModule.js --network hardhat"
   },
   "keywords": [
     "defi",

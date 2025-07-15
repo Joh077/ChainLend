@@ -8,20 +8,27 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 import "./interfaces/IChainlinkPriceFeed.sol";
 
+/**
+ * @title ChainLend P2P Lending Protocol
+ * @author ChainLend Team
+ * @notice A decentralized peer-to-peer lending protocol with ETH collateral
+ * @dev This contract enables users to create loan requests with ETH collateral and allows lenders to fund them
+ * Features include dynamic collateral management, liquidation mechanisms, and CL token rewards
+ */
+
 interface ICLToken {
+    /**
+     * @notice Mints CL tokens to a specified address
+     * @param to The address to mint tokens to
+     * @param amount The amount of tokens to mint
+     */
     function mint(address to, uint256 amount) external;
 }
 
-/**
- * @title ChainLend
- * @dev Protocole de prêt P2P avec collatéral ETH
- * @notice MVP avec gestion dynamique du collatéral
- */
 contract ChainLend is Ownable, ReentrancyGuard {
     
     using SafeERC20 for IERC20;
-    
-    
+
     error ZeroAddress();
     error ZeroAmount();
     error InvalidAmount(uint256 amount, uint256 limit);
@@ -30,90 +37,125 @@ contract ChainLend is Ownable, ReentrancyGuard {
     error InvalidRequest(uint256 requestId, string reason);
     error InvalidRequestStatus(uint256 requestId, RequestStatus current, RequestStatus expected);
     error InvalidLoan(uint256 requestId, string reason);
-    error LoanOverdue(uint256 requestId, uint256 dueDate);
     error InvalidPrice(int256 price);
     error StalePrice(uint256 lastUpdate, uint256 maxAge);
-    error OracleError(string reason);
     error InvalidParameter(string param, uint256 value);
     error DirectETHNotAllowed();
     error InsufficientCollateral(uint256 deposited, uint256 required);
     error ExcessWithdrawalAmount(uint256 requested, uint256 available);
     error CollateralBelowMinimum(uint256 resultingRatio, uint256 minimumRatio);
 
+    // ============ ENUMS ============
     
+    /// @notice Status of a loan request
     enum RequestStatus { Pending, Funded, Cancelled }
     
+    /// @notice Status of an active loan
     enum LoanStatus { Active, Repaid, Liquidated }
     
+    // ============ STRUCTS ============
+    
+    /// @notice Structure representing a loan request
     struct LoanRequest {
         uint256 id;
         uint256 amountRequested;
         uint256 requiredCollateral;
         uint256 actualCollateralDeposited;
         uint256 createdAt;
-        address borrower;        // 20 bytes
-        uint64 duration;         // 8 bytes
-        uint32 interestRate;     // 4 bytes
-        RequestStatus status;    // 1 byte
-        // Total: 20 + 8 + 4 + 1 = 33 bytes (2 slots avec address)
+        address borrower;
+        uint64 duration;
+        uint32 interestRate;
+        RequestStatus status;
     }
     
+    /// @notice Structure representing an active loan
     struct ActiveLoan {
         uint256 requestId;
         uint256 fundedAt;
         uint256 dueDate;
         uint256 principalAmount;
         uint256 totalAmountDue;
-        address lender;          // 20 bytes
-        uint64 interestAmount;   // 8 bytes 
-        LoanStatus status;       // 1 byte
-        // Packing: 20 + 8 + 1 = 29 bytes
+        address lender;
+        uint64 interestAmount;
+        LoanStatus status;
     }
     
+    // ============ CONSTANTS ============
+    
     uint256 public constant BASIS_POINTS = 10000;
-    uint256 public constant MIN_COLLATERAL_RATIO = 15000;      // 150%
-    uint256 public constant LIQUIDATION_THRESHOLD = 13000;     // 130%
-    uint256 public constant WARNING_THRESHOLD = 14000;         // 140% - Zone de danger
-    uint256 public constant PROTOCOL_FEE = 1000;               // 10% des intérêts
-    uint256 public constant LIQUIDATION_BONUS = 400;           // 4% bonus liquidateur
-    uint256 public constant LIQUIDATION_PROTOCOL_FEE = 100;    // 1% frais protocole liquidation
-    uint256 public constant STALENESS_THRESHOLD = 86400;        // 24 heure
-
-    uint256 public constant MIN_INTEREST_RATE = 500;           // 5%
-    uint256 public constant MAX_INTEREST_RATE = 1500;          // 15%
-
+    uint256 public constant MIN_COLLATERAL_RATIO = 15000;
+    uint256 public constant LIQUIDATION_THRESHOLD = 13000;
+    uint256 public constant WARNING_THRESHOLD = 14000;
+    uint256 public constant PROTOCOL_FEE = 1000;
+    uint256 public constant LIQUIDATION_BONUS = 400;
+    uint256 public constant LIQUIDATION_PROTOCOL_FEE = 100;
+    uint256 public constant STALENESS_THRESHOLD = 86400;
+    uint256 public constant MIN_INTEREST_RATE = 500;
+    uint256 public constant MAX_INTEREST_RATE = 1500;
     uint256 public constant MIN_LOAN_DURATION = 30 days;
-    uint256 public constant MAX_LOAN_DURATION = 1095 days;     // ~3 ans
+    uint256 public constant MAX_LOAN_DURATION = 1095 days;
+    uint256 public constant MAX_LOAN_AMOUNT = 500000 * 1e6;
+    
+    // ============ REWARD CONSTANTS ============
+    
+    uint256 public constant REWARD_CREATE_REQUEST = 10 * 1e18;
+    uint256 public constant REWARD_FUND_LOAN = 50 * 1e18;
+    uint256 public constant REWARD_REPAY_ONTIME = 100 * 1e18;
+    uint256 public constant REWARD_LIQUIDATE = 20 * 1e18;
+    uint256 public constant MIN_CLAIM_AMOUNT = 10 * 1e18;
 
-    uint256 public constant MAX_LOAN_AMOUNT = 500000 * 1e6;   // 500k USDC
-
-        // Constantes de récompenses
-    uint256 public constant REWARD_CREATE_REQUEST = 10 * 1e18;   // 10 CL
-    uint256 public constant REWARD_FUND_LOAN = 50 * 1e18;        // 50 CL
-    uint256 public constant REWARD_REPAY_ONTIME = 100 * 1e18;   // 100 CL
-    uint256 public constant REWARD_LIQUIDATE = 20 * 1e18;        // 20 CL
-    uint256 public constant MIN_CLAIM_AMOUNT = 10 * 1e18; // Minimum 10 CL
-
+    // ============ STATE VARIABLES ============
+    
+    /// @notice USDC token contract
     IERC20 public immutable usdcToken;
+    
+    /// @notice Chainlink ETH price feed
     IChainlinkPriceFeed public immutable ethPriceFeed;
+    
+    /// @notice Chainlink USDC price feed
     IChainlinkPriceFeed public immutable usdcPriceFeed;
+    
+    /// @notice CL token contract for rewards
     ICLToken public clToken;
+    
     address public treasury;
-                                                               
+
     uint256 public nextRequestId;
     uint256 public totalActiveRequests;
     uint256 public totalActiveLoans;
     
+    /// @notice Mapping of request ID to loan request data
     mapping(uint256 => LoanRequest) public requests;
+    
+    /// @notice Mapping of request ID to active loan data
     mapping(uint256 => ActiveLoan) public activeLoans;
     
+    /// @notice Mapping of user address to their request IDs
     mapping(address => uint256[]) public userRequests;
+    
+    /// @notice Mapping of user address to their loan IDs (as lender)
     mapping(address => uint256[]) public userLoans;
+    
+    /// @notice Mapping of user address to their request count
     mapping(address => uint256) public userRequestCount;
+    
+    /// @notice Mapping of user address to their loan count (as lender)
     mapping(address => uint256) public userLoanCount;
-
+    
+    /// @notice Mapping of user address to their pending CL rewards
     mapping(address => uint256) public pendingCLRewards;
 
+    // ============ EVENTS ============
+    
+    /**
+     * @notice Emitted when a loan request is created
+     * @param requestId The ID of the created request
+     * @param borrower The address of the borrower
+     * @param amountRequested The amount of USDC requested
+     * @param requiredCollateral The minimum required collateral
+     * @param interestRate The annual interest rate in basis points
+     * @param duration The loan duration in seconds
+     */
     event LoanRequestCreated(
         uint256 indexed requestId, 
         address indexed borrower,
@@ -123,13 +165,15 @@ contract ChainLend is Ownable, ReentrancyGuard {
         uint256 duration
     );
     
-    event CollateralDeposited(
-        uint256 indexed requestId,
-        address indexed borrower,
-        uint256 amount,
-        uint256 totalDeposited
-    );
+    /**
+     * @notice Emitted when collateral is deposited
+     */
+    event CollateralDeposited(uint256 indexed requestId, address indexed borrower, uint256 amount, uint256 totalDeposited
+);
     
+    /**
+     * @notice Emitted when additional collateral is added to an active loan
+     */
     event CollateralAdded(
         uint256 indexed requestId,
         address indexed borrower,
@@ -138,6 +182,9 @@ contract ChainLend is Ownable, ReentrancyGuard {
         uint256 newHealthFactor
     );
     
+    /**
+     * @notice Emitted when excess collateral is withdrawn
+     */
     event ExcessCollateralWithdrawn(
         uint256 indexed requestId,
         address indexed borrower,
@@ -146,6 +193,9 @@ contract ChainLend is Ownable, ReentrancyGuard {
         uint256 newHealthFactor
     );
     
+    /**
+     * @notice Emitted when a loan is funded
+     */
     event LoanFunded(
         uint256 indexed requestId,
         address indexed lender,
@@ -154,13 +204,14 @@ contract ChainLend is Ownable, ReentrancyGuard {
         uint256 dueDate
     );
     
-    event LoanRepaid(
-        uint256 indexed requestId,
-        address indexed borrower,
-        uint256 totalAmount,
-        uint256 protocolFee
-    );
+    /**
+     * @notice Emitted when a loan is repaid
+     */
+    event LoanRepaid(uint256 indexed requestId, address indexed borrower, uint256 totalAmount, uint256 protocolFee);
 
+    /**
+     * @notice Emitted when collateral is withdrawn after loan repayment
+     */
     event CollateralWithdrawn(
         uint256 indexed requestId,
         address indexed borrower,
@@ -168,22 +219,49 @@ contract ChainLend is Ownable, ReentrancyGuard {
         uint256 remainingCollateral
     );
     
-    event LoanLiquidated(
-        uint256 indexed requestId,
-        address indexed liquidator,
-        uint256 collateralLiquidated,
-        uint256 amountRecovered
-    );
+    /**
+     * @notice Emitted when a loan is liquidated
+     */
+    event LoanLiquidated(uint256 indexed requestId, address indexed liquidator, uint256 collateralLiquidated, uint256 amountRecovered);
     
+    /**
+     * @notice Emitted when a loan request is cancelled
+     */
     event LoanRequestCancelled(uint256 indexed requestId, address indexed borrower, uint256 collateralRefunded);
 
+    /**
+     * @notice Emitted when emergency USDC withdrawal is performed
+     * @param to The address receiving the withdrawn USDC
+     * @param amount The amount of USDC withdrawn
+     */
     event EmergencyWithdrawal(address indexed to, uint256 amount);
 
+    /**
+     * @notice Emitted when CL rewards are earned
+     * @param user The address earning the rewards
+     * @param amount The amount of CL tokens earned
+     * @param action The action that triggered the reward
+     */
     event CLRewardsEarned(address indexed user, uint256 amount, string action);
 
+    /**
+     * @notice Emitted when CL rewards are claimed
+     * @param user The address claiming the rewards
+     * @param amount The amount of CL tokens claimed
+     */
     event CLRewardsClaimed(address indexed user, uint256 amount);
     
+    // ============ CONSTRUCTOR ============
     
+    /**
+     * @notice Initializes the ChainLend contract
+     * @param _usdcToken Address of the USDC token contract
+     * @param _ethPriceFeed Address of the Chainlink ETH price feed
+     * @param _treasury Address of the treasury for protocol fees
+     * @param _usdcPriceFeed Address of the Chainlink USDC price feed
+     * @param _clToken Address of the CL token contract
+     * @param _initialOwner Address of the initial owner of the contract
+     */
     constructor( address _usdcToken, address _ethPriceFeed, address _treasury, address _usdcPriceFeed, address _clToken, address _initialOwner) Ownable(_initialOwner) {
         if (_usdcToken == address(0)) revert ZeroAddress();
         if (_ethPriceFeed == address(0)) revert ZeroAddress();
@@ -199,6 +277,13 @@ contract ChainLend is Ownable, ReentrancyGuard {
         nextRequestId = 1;
     }
     
+    // ============ MODIFIERS ============
+    
+    /**
+     * @notice Validates request ID and status
+     * @param _requestId The request ID to validate
+     * @param _expectedStatus The expected status of the request
+     */
     modifier validRequest(uint256 _requestId, RequestStatus _expectedStatus) {
         if (_requestId < 1 || _requestId >= nextRequestId) {
             revert InvalidRequest(_requestId, "Invalid ID range");
@@ -212,6 +297,10 @@ contract ChainLend is Ownable, ReentrancyGuard {
         _;
     }
     
+    /**
+     * @notice Validates that the loan is active
+     * @param _requestId The request ID to validate
+     */
     modifier validActiveLoan(uint256 _requestId) {
         if (_requestId < 1 || _requestId >= nextRequestId) {
             revert InvalidLoan(_requestId, "Invalid ID range");
@@ -225,10 +314,13 @@ contract ChainLend is Ownable, ReentrancyGuard {
         _;
     }
 
+    // ============ MAIN FUNCTIONS ============
+
     /**
-     * @notice Calcule le collatéral requis pour un montant de prêt donné
-     * @param _loanAmount Montant du prêt en USDC
-     * @return Montant de collatéral requis en ETH
+     * @notice Calculates the required collateral for a given loan amount
+     * @dev Uses Chainlink price feeds to get current ETH and USDC prices
+     * @param _loanAmount The amount of USDC to borrow
+     * @return The required collateral amount in ETH (wei)
      */
     function calculateRequiredCollateral(uint256 _loanAmount) public view returns (uint256) {
         if (_loanAmount == 0) revert ZeroAmount();
@@ -249,9 +341,17 @@ contract ChainLend is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Crée une demande de prêt avec dépôt de collatéral
+     * @notice Creates a new loan request with ETH collateral
+     * @dev Borrower must send sufficient ETH as collateral (msg.value)
+     * @param _amountRequested The amount of USDC to borrow
+     * @param _interestRate The annual interest rate in basis points
+     * @param _duration The loan duration in seconds
      */
-    function createLoanRequest( uint256 _amountRequested, uint32 _interestRate, uint64 _duration) external payable nonReentrant {
+    function createLoanRequest(
+        uint256 _amountRequested, 
+        uint32 _interestRate, 
+        uint64 _duration
+    ) external payable nonReentrant {
         
         if (_amountRequested == 0) revert ZeroAmount();
         if (msg.value == 0) revert ZeroAmount();
@@ -288,14 +388,14 @@ contract ChainLend is Ownable, ReentrancyGuard {
         pendingCLRewards[msg.sender] += REWARD_CREATE_REQUEST;
 
         emit LoanRequestCreated(requestId, msg.sender, _amountRequested, requiredCollateral, _interestRate, _duration);
-        
         emit CollateralDeposited(requestId, msg.sender, msg.value, msg.value);
-
         emit CLRewardsEarned(msg.sender, REWARD_CREATE_REQUEST, "Create Request");
     }
 
     /**
-     * @notice Finance un prêt en tant que prêteur
+     * @notice Funds a loan request as a lender
+     * @dev Transfers USDC from lender to borrower and creates an active loan
+     * @param _requestId The ID of the request to fund
      */
     function fundLoan(uint256 _requestId) external nonReentrant validRequest(_requestId, RequestStatus.Pending) {
         LoanRequest storage request = requests[_requestId];
@@ -328,15 +428,14 @@ contract ChainLend is Ownable, ReentrancyGuard {
         usdcToken.safeTransferFrom(msg.sender, request.borrower, request.amountRequested);
         
         emit LoanFunded(_requestId, msg.sender, request.borrower, request.amountRequested, dueDate);
-
         emit CLRewardsEarned(msg.sender, REWARD_FUND_LOAN, "Fund Loan");
     }
 
     /**
-     * @notice Ajoute du collatéral à un prêt actif
-     * @param _requestId ID du prêt
+     * @notice Adds additional collateral to an active loan
+     * @dev Only the borrower can add collateral to their loan
+     * @param _requestId The ID of the loan to add collateral to
      */
-
     function addCollateral(uint256 _requestId) external payable nonReentrant validActiveLoan(_requestId) {
         if (msg.value == 0) revert ZeroAmount();
         
@@ -351,9 +450,10 @@ contract ChainLend is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Retire le collatéral excédentaire (au-dessus de 150%)
-     * @param _requestId ID du prêt
-     * @param _amount Montant à retirer
+     * @notice Withdraws excess collateral (above 150% ratio)
+     * @dev Only the borrower can withdraw excess collateral from their active loan
+     * @param _requestId The ID of the loan
+     * @param _amount The amount of excess collateral to withdraw
      */
     function withdrawExcessCollateral(uint256 _requestId, uint256 _amount) external nonReentrant validActiveLoan(_requestId) {
         if (_amount == 0) revert ZeroAmount();
@@ -390,7 +490,9 @@ contract ChainLend is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Rembourse un prêt actif
+     * @notice Repays an active loan
+     * @dev Only the borrower can repay their loan. Transfers total amount due to lender and protocol fee to treasury
+     * @param _requestId The ID of the loan to repay
      */
     function repayLoan(uint256 _requestId) external nonReentrant validActiveLoan(_requestId) {
         ActiveLoan storage loan = activeLoans[_requestId];
@@ -414,7 +516,9 @@ contract ChainLend is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Retire le collatéral après remboursement du prêt
+     * @notice Withdraws collateral after loan repayment
+     * @dev Only the borrower can withdraw their collateral after repaying the loan
+     * @param _requestId The ID of the repaid loan
      */
     function withdrawCollateral(uint256 _requestId) external nonReentrant {
         if (_requestId < 1 || _requestId >= nextRequestId) {
@@ -439,7 +543,9 @@ contract ChainLend is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Annule une demande de prêt non financée
+     * @notice Cancels a pending loan request
+     * @dev Only the borrower can cancel their own pending request. Refunds the collateral
+     * @param _requestId The ID of the request to cancel
      */
     function cancelLoanRequest(uint256 _requestId) external nonReentrant {
         LoanRequest storage request = requests[_requestId];
@@ -450,9 +556,10 @@ contract ChainLend is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Liquide un prêt sous-collatéralisé
+     * @notice Liquidates an under-collateralized loan
+     * @dev Anyone can liquidate a loan that falls below the liquidation threshold
+     * @param _requestId The ID of the loan to liquidate
      */
-
     function liquidateCollateral(uint256 _requestId) external nonReentrant validActiveLoan(_requestId) {
         ActiveLoan storage loan = activeLoans[_requestId];
         LoanRequest storage request = requests[_requestId];
@@ -489,128 +596,27 @@ contract ChainLend is Ownable, ReentrancyGuard {
     }
 
     /**
-    * @notice Calcule la distribution en ETH à partir des montants USDC
-    */
-    function _calculateLiquidationDistribution(uint256 collateralETH, uint256 collateralValueUSDC, uint256 debtUSDC, uint256 interestAmount) 
-    internal pure returns (uint256 lenderETH, uint256 liquidatorETH, uint256 protocolETH) {
-        
-        uint256 protocolNormalFee = interestAmount * PROTOCOL_FEE / BASIS_POINTS;
-        uint256 lenderRecoveryUSDC = debtUSDC - protocolNormalFee;
-        uint256 liquidationBonus = collateralValueUSDC * LIQUIDATION_BONUS / BASIS_POINTS;
-        uint256 protocolLiquidationFee = collateralValueUSDC * LIQUIDATION_PROTOCOL_FEE / BASIS_POINTS;
-        
-        if (collateralValueUSDC > 0) {
-            lenderETH = (lenderRecoveryUSDC * collateralETH) / collateralValueUSDC;
-            liquidatorETH = (liquidationBonus * collateralETH) / collateralValueUSDC;
-            protocolETH = ((protocolNormalFee + protocolLiquidationFee) * collateralETH) / collateralValueUSDC;
-        }
-        
-        uint256 totalToDistribute = lenderETH + liquidatorETH + protocolETH;
-        if (totalToDistribute > collateralETH) {
-            uint256 ratio = (collateralETH * 1e18) / totalToDistribute;
-            lenderETH = (lenderETH * ratio) / 1e18;
-            liquidatorETH = (liquidatorETH * ratio) / 1e18;
-            protocolETH = collateralETH - lenderETH - liquidatorETH;
-        }
-    }
-
-    /**
-    * @notice Obtient les prix et calcule la valeur du collatéral en USDC
-    */
-
-    function _getCollateralValueInUSDC(uint256 collateralETH) internal view returns (uint256) {
-    
-        (, int256 ethPrice, , uint256 ethUpdatedAt, ) = ethPriceFeed.latestRoundData();
-        (, int256 usdcPrice, , uint256 usdcUpdatedAt, ) = usdcPriceFeed.latestRoundData();
-        
-
-        if (ethPrice <= 0) revert InvalidPrice(ethPrice);
-        if (usdcPrice <= 0) revert InvalidPrice(usdcPrice);
-        if (block.timestamp - ethUpdatedAt > STALENESS_THRESHOLD) revert StalePrice(ethUpdatedAt, STALENESS_THRESHOLD);
-        if (block.timestamp - usdcUpdatedAt > STALENESS_THRESHOLD) revert StalePrice(usdcUpdatedAt, STALENESS_THRESHOLD);
-        
-        uint256 collateralValueUSD = Math.mulDiv(collateralETH, uint256(ethPrice), 1e18);
-        return Math.mulDiv(collateralValueUSD, 1e6, uint256(usdcPrice));
-    }
-
-
-    function _safeTransferETH(address to, uint256 amount, bool revertOnFail) internal {
-        if (amount > 0) {
-            (bool success, ) = payable(to).call{value: amount}("");
-            if (!success && revertOnFail) {
-                revert TransferFailed("ETH transfer failed");
-            }
-        }
-    }
-
+     * @notice Claims accumulated CL token rewards
+     * @dev Mints CL tokens to the caller if they have sufficient pending rewards
+     */
     function claimCLRewards() external nonReentrant {
-
-    uint256 rewards = pendingCLRewards[msg.sender];
-    
-    if (rewards < MIN_CLAIM_AMOUNT) revert InvalidAmount(rewards, MIN_CLAIM_AMOUNT);
-    
-    pendingCLRewards[msg.sender] = 0;
-    clToken.mint(msg.sender, rewards);
-    
-    emit CLRewardsClaimed(msg.sender, rewards);
-}
-
-    /**
-     * @notice Calcule le ratio de collatéralisation actuel
-     * @dev Utilise le montant principal uniquement, pas le montant total dû
-     */
-
-    function _getCurrentCollateralRatio(uint256 _requestId) internal view returns (uint256 currentRatio) {
-        LoanRequest storage request = requests[_requestId];
-        ActiveLoan storage loan = activeLoans[_requestId];
+        uint256 rewards = pendingCLRewards[msg.sender];
         
-        if (request.actualCollateralDeposited == 0) return 0;
-        if (loan.principalAmount == 0) return type(uint256).max;
+        if (rewards < MIN_CLAIM_AMOUNT) revert InvalidAmount(rewards, MIN_CLAIM_AMOUNT);
         
-        (, int256 ethPrice, , uint256 updatedAt, ) = ethPriceFeed.latestRoundData();
-        if (ethPrice <= 0) revert InvalidPrice(ethPrice);
-        if (block.timestamp - updatedAt > STALENESS_THRESHOLD) revert StalePrice(updatedAt, STALENESS_THRESHOLD);
+        pendingCLRewards[msg.sender] = 0;
+        clToken.mint(msg.sender, rewards);
         
-        (, int256 usdcPrice, , uint256 usdcUpdatedAt, ) = usdcPriceFeed.latestRoundData();
-        if (usdcPrice <= 0) revert InvalidPrice(usdcPrice);
-        if (block.timestamp - usdcUpdatedAt > STALENESS_THRESHOLD) revert StalePrice(usdcUpdatedAt, STALENESS_THRESHOLD);
-        
-        uint256 collateralValueUSD = Math.mulDiv(request.actualCollateralDeposited, uint256(ethPrice), 1e18);
-        uint256 collateralValueUSDC = Math.mulDiv(collateralValueUSD, 1e6, uint256(usdcPrice));
-        
-        currentRatio = Math.mulDiv(collateralValueUSDC, BASIS_POINTS, loan.principalAmount);
+        emit CLRewardsClaimed(msg.sender, rewards);
     }
 
-    function _cancelLoanRequest(uint256 _requestId) internal {
-        if (_requestId < 1 || _requestId >= nextRequestId) {
-            revert InvalidRequest(_requestId, "Invalid ID range");
-        }
-        
-        LoanRequest storage request = requests[_requestId];
-        
-        if (request.borrower == address(0)) revert InvalidRequest(_requestId, "Request does not exist");
-        if (request.status != RequestStatus.Pending) {
-            revert InvalidRequestStatus(_requestId, request.status, RequestStatus.Pending);
-        }
-        
-        uint256 collateralToRefund = request.actualCollateralDeposited;
-        
-        request.status = RequestStatus.Cancelled;
-        request.actualCollateralDeposited = 0;
-        totalActiveRequests--;
-        
-        if (collateralToRefund > 0) {
-            (bool ethTransferSuccess, ) = payable(request.borrower).call{value: collateralToRefund}("");
-            if (!ethTransferSuccess) revert TransferFailed("Collateral refund");
-        }
-        
-        emit LoanRequestCancelled(_requestId, request.borrower, collateralToRefund);
-    }
+    // ============ GETTERS ============
 
     /**
-     * @notice Retourne le health factor (ratio de collatéralisation) d'un prêt
+     * @notice Returns the health factor (collateral ratio) of an active loan
+     * @param _requestId The ID of the loan
+     * @return The current collateral ratio in basis points
      */
-
     function getHealthFactor(uint256 _requestId) external view returns (uint256) {
         if (activeLoans[_requestId].status != LoanStatus.Active) {
             revert InvalidLoan(_requestId, "Loan not active");
@@ -619,7 +625,10 @@ contract ChainLend is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Vérifie si un prêt est à risque de liquidation
+     * @notice Checks if a loan is at risk of liquidation
+     * @param _requestId The ID of the loan to check
+     * @return atRisk True if the loan is below the warning threshold
+     * @return currentRatio The current collateral ratio
      */
     function isAtRiskOfLiquidation(uint256 _requestId) external view returns (bool atRisk, uint256 currentRatio) {
         if (activeLoans[_requestId].status != LoanStatus.Active) {
@@ -630,7 +639,9 @@ contract ChainLend is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Calcule le montant de collatéral excédentaire pouvant être retiré
+     * @notice Calculates the amount of excess collateral that can be withdrawn
+     * @param _requestId The ID of the loan
+     * @return excessAmount The amount of excess collateral in wei
      */
     function getExcessCollateral(uint256 _requestId) external view returns (uint256 excessAmount) {
         if (activeLoans[_requestId].status != LoanStatus.Active) {
@@ -645,6 +656,11 @@ contract ChainLend is Ownable, ReentrancyGuard {
         }
     }
 
+    /**
+     * @notice Returns loan request data
+     * @param _requestId The ID of the request
+     * @return The loan request struct
+     */
     function getLoanRequest(uint256 _requestId) external view returns (LoanRequest memory) {
         if (_requestId < 1 || _requestId >= nextRequestId) {
             revert InvalidRequest(_requestId, "Invalid ID range");
@@ -655,6 +671,11 @@ contract ChainLend is Ownable, ReentrancyGuard {
         return requests[_requestId];
     }
 
+    /**
+     * @notice Returns active loan data
+     * @param _requestId The ID of the loan
+     * @return The active loan struct
+     */
     function getActiveLoan(uint256 _requestId) external view returns (ActiveLoan memory) {
         if (_requestId < 1 || _requestId >= nextRequestId) {
             revert InvalidLoan(_requestId, "Invalid ID range");
@@ -665,14 +686,31 @@ contract ChainLend is Ownable, ReentrancyGuard {
         return activeLoans[_requestId];
     }
 
+    /**
+     * @notice Returns all request IDs for a user
+     * @param _user The address of the user
+     * @return Array of request IDs created by the user
+     */
     function getUserRequests(address _user) external view returns (uint256[] memory) {
         return userRequests[_user];
     }
 
+    /**
+     * @notice Returns all loan IDs where user is the lender
+     * @param _user The address of the user
+     * @return Array of loan IDs where the user is the lender
+     */
     function getUserLoans(address _user) external view returns (uint256[] memory) {
         return userLoans[_user];
     }
 
+    /**
+     * @notice Returns pending request IDs with pagination
+     * @param _offset The starting index for pagination
+     * @param _limit The maximum number of results to return (max 100)
+     * @return pendingIds Array of pending request IDs
+     * @return hasMore True if there are more results beyond this page
+     */
     function getPendingRequests(uint256 _offset, uint256 _limit) external view returns (uint256[] memory pendingIds, bool hasMore) {
         if (_limit == 0 || _limit > 100) revert InvalidParameter("limit", _limit);
         
@@ -706,6 +744,10 @@ contract ChainLend is Ownable, ReentrancyGuard {
         hasMore = endIndex < totalPending;
     }
 
+    /**
+     * @notice Returns the total count of pending requests
+     * @return count The number of pending requests
+     */
     function getPendingRequestsCount() external view returns (uint256 count) {
         for (uint256 i = 1; i < nextRequestId; i++) {
             if (requests[i].status == RequestStatus.Pending) {
@@ -714,6 +756,13 @@ contract ChainLend is Ownable, ReentrancyGuard {
         }
     }
 
+    /**
+     * @notice Checks if collateral can be withdrawn for a request
+     * @param _requestId The ID of the request
+     * @return canWithdraw True if collateral can be withdrawn
+     * @return collateralAmount The amount of collateral available
+     * @return reason Human-readable reason if withdrawal is not possible
+     */
     function canWithdrawCollateral(uint256 _requestId) external view returns (bool canWithdraw, uint256 collateralAmount, string memory reason) {
         if (_requestId < 1 || _requestId >= nextRequestId) {
             return (false, 0, "Invalid request ID");
@@ -739,6 +788,13 @@ contract ChainLend is Ownable, ReentrancyGuard {
         return (true, collateralAmount, "");
     }
 
+    /**
+     * @notice Returns protocol statistics
+     * @return totalRequests Total number of requests created
+     * @return activeRequests Number of active (pending) requests
+     * @return activeLoansCount Number of active loans
+     * @return totalVolumeUSDC Total volume of USDC lent through the protocol
+     */
     function getProtocolStats() external view returns (
         uint256 totalRequests,
         uint256 activeRequests,
@@ -756,15 +812,152 @@ contract ChainLend is Ownable, ReentrancyGuard {
         }
     }
 
-    receive() external payable {
-        revert DirectETHNotAllowed();
+    // ============ INTERNAL FUNCTIONS ============
+
+    /**
+     * @dev Calculates liquidation distribution in ETH from USDC amounts
+     * @param collateralETH Total collateral amount in ETH
+     * @param collateralValueUSDC Value of collateral in USDC
+     * @param debtUSDC Total debt amount in USDC
+     * @param interestAmount Interest amount in USDC
+     * @return lenderETH Amount of ETH for the lender
+     * @return liquidatorETH Amount of ETH for the liquidator
+     * @return protocolETH Amount of ETH for the protocol
+     */
+    function _calculateLiquidationDistribution(
+        uint256 collateralETH, 
+        uint256 collateralValueUSDC, 
+        uint256 debtUSDC, 
+        uint256 interestAmount
+    ) internal pure returns (uint256 lenderETH, uint256 liquidatorETH, uint256 protocolETH) {
+        
+        uint256 protocolNormalFee = interestAmount * PROTOCOL_FEE / BASIS_POINTS;
+        uint256 lenderRecoveryUSDC = debtUSDC - protocolNormalFee;
+        uint256 liquidationBonus = collateralValueUSDC * LIQUIDATION_BONUS / BASIS_POINTS;
+        uint256 protocolLiquidationFee = collateralValueUSDC * LIQUIDATION_PROTOCOL_FEE / BASIS_POINTS;
+        
+        if (collateralValueUSDC > 0) {
+            lenderETH = (lenderRecoveryUSDC * collateralETH) / collateralValueUSDC;
+            liquidatorETH = (liquidationBonus * collateralETH) / collateralValueUSDC;
+            protocolETH = ((protocolNormalFee + protocolLiquidationFee) * collateralETH) / collateralValueUSDC;
+        }
+        
+        uint256 totalToDistribute = lenderETH + liquidatorETH + protocolETH;
+        if (totalToDistribute > collateralETH) {
+            uint256 ratio = (collateralETH * 1e18) / totalToDistribute;
+            lenderETH = (lenderETH * ratio) / 1e18;
+            liquidatorETH = (liquidatorETH * ratio) / 1e18;
+            protocolETH = collateralETH - lenderETH - liquidatorETH;
+        }
     }
 
+    /**
+     * @dev Gets collateral value in USDC using price feeds
+     * @param collateralETH Amount of collateral in ETH
+     * @return Value of collateral in USDC
+     */
+    function _getCollateralValueInUSDC(uint256 collateralETH) internal view returns (uint256) {
+        (, int256 ethPrice, , uint256 ethUpdatedAt, ) = ethPriceFeed.latestRoundData();
+        (, int256 usdcPrice, , uint256 usdcUpdatedAt, ) = usdcPriceFeed.latestRoundData();
+        
+        if (ethPrice <= 0) revert InvalidPrice(ethPrice);
+        if (usdcPrice <= 0) revert InvalidPrice(usdcPrice);
+        if (block.timestamp - ethUpdatedAt > STALENESS_THRESHOLD) revert StalePrice(ethUpdatedAt, STALENESS_THRESHOLD);
+        if (block.timestamp - usdcUpdatedAt > STALENESS_THRESHOLD) revert StalePrice(usdcUpdatedAt, STALENESS_THRESHOLD);
+        
+        uint256 collateralValueUSD = Math.mulDiv(collateralETH, uint256(ethPrice), 1e18);
+        return Math.mulDiv(collateralValueUSD, 1e6, uint256(usdcPrice));
+    }
+
+    /**
+     * @dev Safely transfers ETH to an address
+     * @param to The recipient address
+     * @param amount The amount to transfer
+     * @param revertOnFail Whether to revert if transfer fails
+     */
+    function _safeTransferETH(address to, uint256 amount, bool revertOnFail) internal {
+        if (amount > 0) {
+            (bool success, ) = payable(to).call{value: amount}("");
+            if (!success && revertOnFail) {
+                revert TransferFailed("ETH transfer failed");
+            }
+        }
+    }
+
+    /**
+     * @dev Calculates the current collateral ratio for an active loan
+     * @param _requestId The ID of the loan
+     * @return currentRatio The collateral ratio in basis points
+     */
+    function _getCurrentCollateralRatio(uint256 _requestId) internal view returns (uint256 currentRatio) {
+        LoanRequest storage request = requests[_requestId];
+        ActiveLoan storage loan = activeLoans[_requestId];
+        
+        if (request.actualCollateralDeposited == 0) return 0;
+        if (loan.principalAmount == 0) return type(uint256).max;
+        
+        (, int256 ethPrice, , uint256 updatedAt, ) = ethPriceFeed.latestRoundData();
+        if (ethPrice <= 0) revert InvalidPrice(ethPrice);
+        if (block.timestamp - updatedAt > STALENESS_THRESHOLD) revert StalePrice(updatedAt, STALENESS_THRESHOLD);
+        
+        (, int256 usdcPrice, , uint256 usdcUpdatedAt, ) = usdcPriceFeed.latestRoundData();
+        if (usdcPrice <= 0) revert InvalidPrice(usdcPrice);
+        if (block.timestamp - usdcUpdatedAt > STALENESS_THRESHOLD) revert StalePrice(usdcUpdatedAt, STALENESS_THRESHOLD);
+        
+        uint256 collateralValueUSD = Math.mulDiv(request.actualCollateralDeposited, uint256(ethPrice), 1e18);
+        uint256 collateralValueUSDC = Math.mulDiv(collateralValueUSD, 1e6, uint256(usdcPrice));
+        
+        currentRatio = Math.mulDiv(collateralValueUSDC, BASIS_POINTS, loan.principalAmount);
+    }
+
+    /**
+     * @dev Internal function to cancel a loan request
+     * @param _requestId The ID of the request to cancel
+     */
+    function _cancelLoanRequest(uint256 _requestId) internal {
+        if (_requestId < 1 || _requestId >= nextRequestId) {
+            revert InvalidRequest(_requestId, "Invalid ID range");
+        }
+        
+        LoanRequest storage request = requests[_requestId];
+        
+        if (request.borrower == address(0)) revert InvalidRequest(_requestId, "Request does not exist");
+        if (request.status != RequestStatus.Pending) {
+            revert InvalidRequestStatus(_requestId, request.status, RequestStatus.Pending);
+        }
+        
+        uint256 collateralToRefund = request.actualCollateralDeposited;
+        
+        request.status = RequestStatus.Cancelled;
+        request.actualCollateralDeposited = 0;
+        totalActiveRequests--;
+        
+        if (collateralToRefund > 0) {
+            (bool ethTransferSuccess, ) = payable(request.borrower).call{value: collateralToRefund}("");
+            if (!ethTransferSuccess) revert TransferFailed("Collateral refund");
+        }
+        
+        emit LoanRequestCancelled(_requestId, request.borrower, collateralToRefund);
+    }
+
+    // ============ ADMIN FUNCTIONS ============
+
+    /**
+     * @notice Updates the treasury address
+     * @dev Only the contract owner can update the treasury
+     * @param _newTreasury The new treasury address
+     */
     function updateTreasury(address _newTreasury) external onlyOwner {
         if (_newTreasury == address(0)) revert ZeroAddress();
         treasury = _newTreasury;
     }
 
+    /**
+     * @notice Emergency withdrawal of USDC from the contract
+     * @dev Only the contract owner can perform emergency withdrawals
+     * @param _to The address to send the USDC to
+     * @param _amount The amount of USDC to withdraw
+     */
     function emergencyWithdrawUSDC(address _to, uint256 _amount) external onlyOwner {
         if (_to == address(0)) revert ZeroAddress();
         if (_amount == 0) revert ZeroAmount();
@@ -772,5 +965,15 @@ contract ChainLend is Ownable, ReentrancyGuard {
         usdcToken.safeTransfer(_to, _amount);
         
         emit EmergencyWithdrawal(_to, _amount);
+    }
+
+    // ============ RECEIVE FUNCTION ============
+
+    /**
+     * @notice Prevents direct ETH transfers to the contract
+     * @dev All ETH must be sent through proper functions like createLoanRequest
+     */
+    receive() external payable {
+        revert DirectETHNotAllowed();
     }
 }
