@@ -1,0 +1,22 @@
+node_modules
+.env
+
+# Hardhat files
+backend/cache
+backend/artifacts
+backend/coverage
+backend/coverage.json
+
+# TypeChain files
+backend/typechain
+backend/typechain-types
+
+# Hardhat Ignition default folder for deployments against a local node
+backend/ignition/deployments/chain-31337
+
+# Exclure les dossiers non désirés
+/frontend
+/backend/test
+/backend/scripts
+/backend/.env
+/frontend/.env
