@@ -1,0 +1,38 @@
+name: ChainLend CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths: ['backend/**'] # Se déclenche uniquement si le dossier backend change
+  pull_request:
+    branches: [main]
+    paths: ['backend/**']
+
+jobs:
+  test:
+    name: Smart Contract Tests
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: ./backend # Travaille dans le dossier backend
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.19.2'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json 
+          
+      - name: Install Dependencies
+        run: npm ci
+        
+      - name: Compile Contracts
+        run: npx hardhat compile
+        
+      - name: Run Tests
+        run: npx hardhat test
