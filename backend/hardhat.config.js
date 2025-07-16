@@ -23,15 +23,15 @@ module.exports = {
     currency: "USD"
   },
   networks: {
-    sepolia: {
-      url: `https://sepolia.infura.io/v3/${INFURA_API_KEY}`,
-      accounts: [`0x${PK}`],
-      chainId: 11155111
-    },
     localhost: {
       url: "http://127.0.0.1:8545",
       chainId: 31337,
     },
+    // sepolia: {
+    //   url: `https://sepolia.infura.io/v3/${INFURA_API_KEY}`,
+    //   accounts: [`0x${PK}`],
+    //   chainId: 11155111
+    // },
     // Configuration hardhat pour fork Base
     // hardhat: {
     //   chainId: 8453, // Force Base chainId
