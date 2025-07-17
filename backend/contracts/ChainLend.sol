@@ -116,7 +116,7 @@ contract ChainLend is Ownable, ReentrancyGuard {
     IChainlinkPriceFeed public immutable usdcPriceFeed;
     
     /// @notice CL token contract for rewards
-    ICLToken public clToken;
+    ICLToken public immutable clToken;
     
     address public treasury;
 
@@ -837,7 +837,7 @@ contract ChainLend is Ownable, ReentrancyGuard {
         uint256 protocolLiquidationFee = collateralValueUSDC * LIQUIDATION_PROTOCOL_FEE / BASIS_POINTS;
         
         if (collateralValueUSDC > 0) {
-            lenderETH = (lenderRecoveryUSDC * collateralETH) / collateralValueUSDC;
+            lenderETH = Math.mulDiv(lenderRecoveryUSDC, collateralETH, collateralValueUSDC);
             liquidatorETH = (liquidationBonus * collateralETH) / collateralValueUSDC;
             protocolETH = ((protocolNormalFee + protocolLiquidationFee) * collateralETH) / collateralValueUSDC;
         }
