@@ -27,24 +27,22 @@ module.exports = {
     localhost: {
       url: "http://127.0.0.1:8545",
       chainId: 31337, 
-      //chainId: 8453,
     },
-    hardhat: {
-      //chainId: 8453,
-      chainId: 31337, 
-      forking: {
-        url: "https://mainnet.base.org",
-      },
-      accounts: {
-        mnemonic: "test test test test test test test test test test test junk",
-        count: 20,
-        accountsBalance: "100000000000000000000000"
-      },
-      allowUnlimitedContractSize: true,
-      blockGasLimit: 30000000,
-      gas: 30000000,
-      initialBaseFeePerGas: 0,
-    },
+    // hardhat: {
+    //   chainId: 31337, // 
+    //   forking: {
+    //     url: `https://mainnet.infura.io/v3/${INFURA_API_KEY}`, // 
+    //   },
+    //   accounts: {
+    //     mnemonic: "test test test test test test test test test test test junk",
+    //     count: 20,
+    //     accountsBalance: "100000000000000000000000"
+    //   },
+    //   allowUnlimitedContractSize: true,
+    //   blockGasLimit: 30000000,
+    //   gas: 30000000,
+    //   initialBaseFeePerGas: 0,
+    // },
   },
   etherscan: {
     apiKey: ETHERSCAN
