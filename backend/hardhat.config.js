@@ -26,11 +26,12 @@ module.exports = {
   networks: {
     localhost: {
       url: "http://127.0.0.1:8545",
-      //chainId: 31337, pour localhost
-      chainId: 8453,
+      chainId: 31337, 
+      //chainId: 8453,
     },
     hardhat: {
-      chainId: 8453,
+      //chainId: 8453,
+      chainId: 31337, 
       forking: {
         url: "https://mainnet.base.org",
       },
@@ -41,6 +42,8 @@ module.exports = {
       },
       allowUnlimitedContractSize: true,
       blockGasLimit: 30000000,
+      gas: 30000000,
+      initialBaseFeePerGas: 0,
     },
   },
   etherscan: {

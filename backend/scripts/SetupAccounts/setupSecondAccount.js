@@ -2,7 +2,7 @@ const { ethers } = require("hardhat");
 
 async function main() {
 
-  const usdcAddress = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
+  const usdcAddress = "0x92fC18e65714Eb4c355E90D3BfD76fE75a10ecc9";
   
   // Vérification préalable
   const code = await ethers.provider.getCode(usdcAddress);
