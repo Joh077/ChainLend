@@ -19,7 +19,6 @@ describe("CL Token Rewards", function () {
       expect(await chainLend.REWARD_CREATE_REQUEST()).to.equal(ethers.parseEther("10"));
       expect(await chainLend.REWARD_FUND_LOAN()).to.equal(ethers.parseEther("50"));
       expect(await chainLend.REWARD_REPAY_ONTIME()).to.equal(ethers.parseEther("100"));
-      expect(await chainLend.REWARD_LIQUIDATE()).to.equal(ethers.parseEther("20"));
       expect(await chainLend.MIN_CLAIM_AMOUNT()).to.equal(ethers.parseEther("10"));
     });
 
@@ -224,32 +223,6 @@ describe("CL Token Rewards", function () {
 
       expect(await clToken.balanceOf(borrower.address)).to.equal(ethers.parseEther("10"));
       expect(await clToken.balanceOf(lender.address)).to.equal(ethers.parseEther("50"));
-    });
-
-    it("Should handle rewards in liquidation", async function () {
-      const { liquidator } = await loadFixture(deployChainLendFixture);
-      const amountRequested = ethers.parseUnits("1000", 6);
-      const requiredCollateral = await chainLend.calculateRequiredCollateral(amountRequested);
-
-      // Create and fund loan
-      await chainLend.connect(borrower).createLoanRequest(
-        amountRequested,
-        1000,
-        30 * 24 * 60 * 60,
-        { value: requiredCollateral }
-      );
-
-      await chainLend.connect(lender).fundLoan(1);
-
-      // Drop price to trigger liquidation
-      await ethPriceFeed.updatePrice(1000e8);
-
-      // Liquidate (should not give additional rewards in current implementation)
-      await chainLend.connect(liquidator).liquidateCollateral(1);
-
-      // Check rewards remain from creation and funding
-      expect(await chainLend.pendingCLRewards(borrower.address)).to.equal(ethers.parseEther("10"));
-      expect(await chainLend.pendingCLRewards(lender.address)).to.equal(ethers.parseEther("50")); 
     });
 
     it("Should handle rewards with loan cancellation", async function () {

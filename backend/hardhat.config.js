@@ -31,7 +31,7 @@ module.exports = {
     hardhat: {
       chainId: 8545, 
       forking: {
-        url: `https://mainnet.infura.io/v3/${INFURA_API_KEY}`, 
+        url: `https://mainnet.base.org`, 
       },
       accounts: {
         mnemonic: "test test test test test test test test test test test junk",

@@ -88,12 +88,6 @@ interface IChainLend {
         uint256 remainingCollateral
     );
     
-    event LoanLiquidated(
-        uint256 indexed requestId,
-        address indexed liquidator,
-        uint256 collateralLiquidated,
-        uint256 amountRecovered
-    );
     
     event LoanRequestCancelled(
         uint256 indexed requestId, 
@@ -113,8 +107,6 @@ interface IChainLend {
     function LIQUIDATION_THRESHOLD() external view returns (uint256);
     function WARNING_THRESHOLD() external view returns (uint256);
     function PROTOCOL_FEE() external view returns (uint256);
-    function LIQUIDATION_BONUS() external view returns (uint256);
-    function LIQUIDATION_PROTOCOL_FEE() external view returns (uint256);
     function STALENESS_THRESHOLD() external view returns (uint256);
     function MIN_INTEREST_RATE() external view returns (uint256);
     function MAX_INTEREST_RATE() external view returns (uint256);
@@ -185,8 +177,6 @@ interface IChainLend {
     function withdrawCollateral(uint256 _requestId) external;
 
     function cancelLoanRequest(uint256 _requestId) external;
-
-    function liquidateCollateral(uint256 _requestId) external;
 
     function claimCLRewards() external;
     

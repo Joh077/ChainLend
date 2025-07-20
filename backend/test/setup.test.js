@@ -122,14 +122,6 @@ describe("Setup & Configuration", function () {
       expect(await chainLend.PROTOCOL_FEE()).to.equal(1000); // 10%
     });
 
-    it("Should have correct LIQUIDATION_BONUS", async function () {
-      expect(await chainLend.LIQUIDATION_BONUS()).to.equal(400); // 4%
-    });
-
-    it("Should have correct LIQUIDATION_PROTOCOL_FEE", async function () {
-      expect(await chainLend.LIQUIDATION_PROTOCOL_FEE()).to.equal(100); // 1%
-    });
-
     it("Should have correct STALENESS_THRESHOLD", async function () {
       expect(await chainLend.STALENESS_THRESHOLD()).to.equal(86400); // 24 hours
     });
@@ -158,7 +150,6 @@ describe("Setup & Configuration", function () {
       expect(await chainLend.REWARD_CREATE_REQUEST()).to.equal(ethers.parseEther("10"));
       expect(await chainLend.REWARD_FUND_LOAN()).to.equal(ethers.parseEther("50"));
       expect(await chainLend.REWARD_REPAY_ONTIME()).to.equal(ethers.parseEther("100"));
-      expect(await chainLend.REWARD_LIQUIDATE()).to.equal(ethers.parseEther("20"));
       expect(await chainLend.MIN_CLAIM_AMOUNT()).to.equal(ethers.parseEther("10"));
     });
   });

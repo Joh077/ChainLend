@@ -13,7 +13,7 @@ import "./interfaces/IChainlinkPriceFeed.sol";
  * @author ChainLend Team
  * @notice A decentralized peer-to-peer lending protocol with ETH collateral
  * @dev This contract enables users to create loan requests with ETH collateral and allows lenders to fund them
- * Features include dynamic collateral management, liquidation mechanisms, and CL token rewards
+ * Features include dynamic collateral management, and CL token rewards
  */
 
 interface ICLToken {
@@ -87,8 +87,6 @@ contract ChainLend is Ownable, ReentrancyGuard {
     uint256 public constant LIQUIDATION_THRESHOLD = 13000;
     uint256 public constant WARNING_THRESHOLD = 14000;
     uint256 public constant PROTOCOL_FEE = 1000;
-    uint256 public constant LIQUIDATION_BONUS = 400;
-    uint256 public constant LIQUIDATION_PROTOCOL_FEE = 100;
     uint256 public constant STALENESS_THRESHOLD = 86400;
     uint256 public constant MIN_INTEREST_RATE = 500;
     uint256 public constant MAX_INTEREST_RATE = 1500;
@@ -101,7 +99,6 @@ contract ChainLend is Ownable, ReentrancyGuard {
     uint256 public constant REWARD_CREATE_REQUEST = 10 * 1e18;
     uint256 public constant REWARD_FUND_LOAN = 50 * 1e18;
     uint256 public constant REWARD_REPAY_ONTIME = 100 * 1e18;
-    uint256 public constant REWARD_LIQUIDATE = 20 * 1e18;
     uint256 public constant MIN_CLAIM_AMOUNT = 10 * 1e18;
 
     // ============ STATE VARIABLES ============
@@ -218,11 +215,6 @@ contract ChainLend is Ownable, ReentrancyGuard {
         uint256 amountWithdrawn,
         uint256 remainingCollateral
     );
-    
-    /**
-     * @notice Emitted when a loan is liquidated
-     */
-    event LoanLiquidated(uint256 indexed requestId, address indexed liquidator, uint256 collateralLiquidated, uint256 amountRecovered);
     
     /**
      * @notice Emitted when a loan request is cancelled
@@ -556,46 +548,6 @@ contract ChainLend is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Liquidates an under-collateralized loan
-     * @dev Anyone can liquidate a loan that falls below the liquidation threshold
-     * @param _requestId The ID of the loan to liquidate
-     */
-    function liquidateCollateral(uint256 _requestId) external nonReentrant validActiveLoan(_requestId) {
-        ActiveLoan storage loan = activeLoans[_requestId];
-        LoanRequest storage request = requests[_requestId];
-        
-        if (_getCurrentCollateralRatio(_requestId) >= LIQUIDATION_THRESHOLD) {
-            revert InvalidLoan(_requestId, "Collateral ratio above liquidation threshold");
-        }
-        
-        uint256 collateralETH = request.actualCollateralDeposited;
-        
-        loan.status = LoanStatus.Liquidated;
-        request.actualCollateralDeposited = 0;
-        totalActiveLoans--;
-        
-        uint256 collateralValueUSDC = _getCollateralValueInUSDC(collateralETH);
-        
-        (uint256 lenderETH, uint256 liquidatorETH, uint256 protocolETH) = _calculateLiquidationDistribution(
-            collateralETH,
-            collateralValueUSDC,
-            loan.totalAmountDue,
-            loan.interestAmount
-        );
-        
-        _safeTransferETH(loan.lender, lenderETH, true);
-        _safeTransferETH(msg.sender, liquidatorETH, true);
-        _safeTransferETH(treasury, protocolETH, true);
-        
-        uint256 totalDistributed = lenderETH + liquidatorETH + protocolETH;
-        if (collateralETH > totalDistributed) {
-            _safeTransferETH(request.borrower, collateralETH - totalDistributed, false);
-        }
-        
-        emit LoanLiquidated(_requestId, msg.sender, collateralETH, lenderETH);
-    }
-
-    /**
      * @notice Claims accumulated CL token rewards
      * @dev Mints CL tokens to the caller if they have sufficient pending rewards
      */
@@ -813,61 +765,6 @@ contract ChainLend is Ownable, ReentrancyGuard {
     }
 
     // ============ INTERNAL FUNCTIONS ============
-
-    /**
-     * @dev Calculates liquidation distribution in ETH from USDC amounts
-     * @param collateralETH Total collateral amount in ETH
-     * @param collateralValueUSDC Value of collateral in USDC
-     * @param debtUSDC Total debt amount in USDC
-     * @param interestAmount Interest amount in USDC
-     * @return lenderETH Amount of ETH for the lender
-     * @return liquidatorETH Amount of ETH for the liquidator
-     * @return protocolETH Amount of ETH for the protocol
-     */
-    function _calculateLiquidationDistribution(
-        uint256 collateralETH, 
-        uint256 collateralValueUSDC, 
-        uint256 debtUSDC, 
-        uint256 interestAmount
-    ) internal pure returns (uint256 lenderETH, uint256 liquidatorETH, uint256 protocolETH) {
-        
-        uint256 protocolNormalFee = interestAmount * PROTOCOL_FEE / BASIS_POINTS;
-        uint256 lenderRecoveryUSDC = debtUSDC - protocolNormalFee;
-        uint256 liquidationBonus = collateralValueUSDC * LIQUIDATION_BONUS / BASIS_POINTS;
-        uint256 protocolLiquidationFee = collateralValueUSDC * LIQUIDATION_PROTOCOL_FEE / BASIS_POINTS;
-        
-        if (collateralValueUSDC > 0) {
-            lenderETH = Math.mulDiv(lenderRecoveryUSDC, collateralETH, collateralValueUSDC);
-            liquidatorETH = (liquidationBonus * collateralETH) / collateralValueUSDC;
-            protocolETH = ((protocolNormalFee + protocolLiquidationFee) * collateralETH) / collateralValueUSDC;
-        }
-        
-        uint256 totalToDistribute = lenderETH + liquidatorETH + protocolETH;
-        if (totalToDistribute > collateralETH) {
-            uint256 ratio = (collateralETH * 1e18) / totalToDistribute;
-            lenderETH = (lenderETH * ratio) / 1e18;
-            liquidatorETH = (liquidatorETH * ratio) / 1e18;
-            protocolETH = collateralETH - lenderETH - liquidatorETH;
-        }
-    }
-
-    /**
-     * @dev Gets collateral value in USDC using price feeds
-     * @param collateralETH Amount of collateral in ETH
-     * @return Value of collateral in USDC
-     */
-    function _getCollateralValueInUSDC(uint256 collateralETH) internal view returns (uint256) {
-        (, int256 ethPrice, , uint256 ethUpdatedAt, ) = ethPriceFeed.latestRoundData();
-        (, int256 usdcPrice, , uint256 usdcUpdatedAt, ) = usdcPriceFeed.latestRoundData();
-        
-        if (ethPrice <= 0) revert InvalidPrice(ethPrice);
-        if (usdcPrice <= 0) revert InvalidPrice(usdcPrice);
-        if (block.timestamp - ethUpdatedAt > STALENESS_THRESHOLD) revert StalePrice(ethUpdatedAt, STALENESS_THRESHOLD);
-        if (block.timestamp - usdcUpdatedAt > STALENESS_THRESHOLD) revert StalePrice(usdcUpdatedAt, STALENESS_THRESHOLD);
-        
-        uint256 collateralValueUSD = Math.mulDiv(collateralETH, uint256(ethPrice), 1e18);
-        return Math.mulDiv(collateralValueUSD, 1e6, uint256(usdcPrice));
-    }
 
     /**
      * @dev Safely transfers ETH to an address
