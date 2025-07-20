@@ -314,6 +314,7 @@ contract ChainLend is IChainLend, Ownable, ReentrancyGuard {
 
         loan.status = LoanStatus.Repaid;
         totalActiveLoans--;
+        pendingCLRewards[msg.sender] += REWARD_REPAY_ONTIME;
         
         usdcToken.safeTransferFrom(msg.sender, loan.lender, lenderAmount);
         
@@ -322,6 +323,7 @@ contract ChainLend is IChainLend, Ownable, ReentrancyGuard {
         }
         
         emit LoanRepaid(_requestId, request.borrower, loan.totalAmountDue, protocolFee);
+        emit CLRewardsEarned(msg.sender, REWARD_REPAY_ONTIME, "Repay Loan");
     }
 
     /**

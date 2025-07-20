@@ -57,6 +57,30 @@ describe("CL Token Rewards", function () {
       expect(pendingRewards).to.equal(ethers.parseEther("50"));
     });
 
+    it("Should earn rewards for repaying loan", async function () {
+      const amountRequested = ethers.parseUnits("1000", 6);
+      const requiredCollateral = await chainLend.calculateRequiredCollateral(amountRequested);
+
+      await chainLend.connect(borrower).createLoanRequest(
+        amountRequested,
+        1000,
+        30 * 24 * 60 * 60,
+        { value: requiredCollateral }
+      );
+
+      await expect(chainLend.connect(lender).fundLoan(1))
+        .to.emit(chainLend, "CLRewardsEarned")
+        .withArgs(lender.address, ethers.parseEther("50"), "Fund Loan");
+
+      const pendingRewards = await chainLend.pendingCLRewards(lender.address);
+      expect(pendingRewards).to.equal(ethers.parseEther("50"));
+
+      await expect(chainLend.connect(borrower).repayLoan(1)).to.emit(chainLend, "CLRewardsEarned").withArgs(borrower.address, ethers.parseEther("100"),"Repay Loan");
+
+      const pendingRewardsBorrower = await chainLend.pendingCLRewards(borrower.address);
+      expect(pendingRewardsBorrower).to.equal(ethers.parseEther("110"));
+    });
+
     it("Should accumulate rewards from multiple actions", async function () {
       const amountRequested = ethers.parseUnits("1000", 6);
       const requiredCollateral = await chainLend.calculateRequiredCollateral(amountRequested);
@@ -214,14 +238,14 @@ describe("CL Token Rewards", function () {
       await chainLend.connect(borrower).repayLoan(1);
 
       // Check final rewards
-      expect(await chainLend.pendingCLRewards(borrower.address)).to.equal(ethers.parseEther("10"));
+      expect(await chainLend.pendingCLRewards(borrower.address)).to.equal(ethers.parseEther("110"));
       expect(await chainLend.pendingCLRewards(lender.address)).to.equal(ethers.parseEther("50"));
 
       // Both should be able to claim
       await chainLend.connect(borrower).claimCLRewards();
       await chainLend.connect(lender).claimCLRewards();
 
-      expect(await clToken.balanceOf(borrower.address)).to.equal(ethers.parseEther("10"));
+      expect(await clToken.balanceOf(borrower.address)).to.equal(ethers.parseEther("110"));
       expect(await clToken.balanceOf(lender.address)).to.equal(ethers.parseEther("50"));
     });
 

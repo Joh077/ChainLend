@@ -122,8 +122,7 @@ export function MyTokens() {
     return [
       { action: "Créer une demande", reward: "10 CL" },
       { action: "Financer un prêt", reward: "50 CL" },
-      { action: "Rembourser à temps", reward: "100 CL" },
-      { action: "Liquider un prêt", reward: "20 CL" }
+      { action: "Rembourser à temps", reward: "100 CL" }
     ];
   };
 
