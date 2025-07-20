@@ -5,7 +5,7 @@ pragma solidity ^0.8.20;
 
 /**
  * @title MockChainlinkPriceFeed
- * @author ChainLend Team  
+ * @author Johan L
  * @notice Mock implementation of Chainlink price feed for testing purposes
  * @dev This contract simulates Chainlink's AggregatorV3Interface for testing
  */

@@ -5,7 +5,7 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 /**
  * @title MockERC20
- * @author ChainLend Team
+ * @author Johan L
  * @notice Mock ERC20 token for testing purposes (simulates USDC)
  * @dev This contract provides mint and burn functions for testing scenarios
  */

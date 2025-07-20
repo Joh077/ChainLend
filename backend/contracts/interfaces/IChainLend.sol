@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 
 /**
  * @title IChainLend Interface
- * @author ChainLend Team
+ * @author Johan L.
  * @notice Interface for ChainLend P2P Lending Protocol with ETH collateral
  * @dev This interface defines all functions, events, and structures for the ChainLend protocol
  */
