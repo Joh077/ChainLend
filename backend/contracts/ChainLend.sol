@@ -7,13 +7,14 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 import "./interfaces/IChainlinkPriceFeed.sol";
+import "./interfaces/IChainLend.sol";
 
 /**
  * @title ChainLend P2P Lending Protocol
- * @author ChainLend Team
+ * @author Johan L.
  * @notice A decentralized peer-to-peer lending protocol with ETH collateral
  * @dev This contract enables users to create loan requests with ETH collateral and allows lenders to fund them
- * Features include dynamic collateral management, and CL token rewards
+ * Features include dynamic collateral management and CL token rewards
  */
 
 interface ICLToken {
@@ -25,61 +26,10 @@ interface ICLToken {
     function mint(address to, uint256 amount) external;
 }
 
-contract ChainLend is Ownable, ReentrancyGuard {
+contract ChainLend is IChainLend, Ownable, ReentrancyGuard {
     
     using SafeERC20 for IERC20;
 
-    error ZeroAddress();
-    error ZeroAmount();
-    error InvalidAmount(uint256 amount, uint256 limit);
-    error Unauthorized(address caller);
-    error TransferFailed(string transferType);
-    error InvalidRequest(uint256 requestId, string reason);
-    error InvalidRequestStatus(uint256 requestId, RequestStatus current, RequestStatus expected);
-    error InvalidLoan(uint256 requestId, string reason);
-    error InvalidPrice(int256 price);
-    error StalePrice(uint256 lastUpdate, uint256 maxAge);
-    error InvalidParameter(string param, uint256 value);
-    error DirectETHNotAllowed();
-    error InsufficientCollateral(uint256 deposited, uint256 required);
-    error ExcessWithdrawalAmount(uint256 requested, uint256 available);
-    error CollateralBelowMinimum(uint256 resultingRatio, uint256 minimumRatio);
-
-    // ============ ENUMS ============
-    
-    /// @notice Status of a loan request
-    enum RequestStatus { Pending, Funded, Cancelled }
-    
-    /// @notice Status of an active loan
-    enum LoanStatus { Active, Repaid, Liquidated }
-    
-    // ============ STRUCTS ============
-    
-    /// @notice Structure representing a loan request
-    struct LoanRequest {
-        uint256 id;
-        uint256 amountRequested;
-        uint256 requiredCollateral;
-        uint256 actualCollateralDeposited;
-        uint256 createdAt;
-        address borrower;
-        uint64 duration;
-        uint32 interestRate;
-        RequestStatus status;
-    }
-    
-    /// @notice Structure representing an active loan
-    struct ActiveLoan {
-        uint256 requestId;
-        uint256 fundedAt;
-        uint256 dueDate;
-        uint256 principalAmount;
-        uint256 totalAmountDue;
-        address lender;
-        uint64 interestAmount;
-        LoanStatus status;
-    }
-    
     // ============ CONSTANTS ============
     
     uint256 public constant BASIS_POINTS = 10000;
@@ -121,127 +71,13 @@ contract ChainLend is Ownable, ReentrancyGuard {
     uint256 public totalActiveRequests;
     uint256 public totalActiveLoans;
     
-    /// @notice Mapping of request ID to loan request data
-    mapping(uint256 => LoanRequest) public requests;
-    
-    /// @notice Mapping of request ID to active loan data
-    mapping(uint256 => ActiveLoan) public activeLoans;
-    
-    /// @notice Mapping of user address to their request IDs
-    mapping(address => uint256[]) public userRequests;
-    
-    /// @notice Mapping of user address to their loan IDs (as lender)
-    mapping(address => uint256[]) public userLoans;
-    
-    /// @notice Mapping of user address to their request count
-    mapping(address => uint256) public userRequestCount;
-    
-    /// @notice Mapping of user address to their loan count (as lender)
-    mapping(address => uint256) public userLoanCount;
-    
-    /// @notice Mapping of user address to their pending CL rewards
-    mapping(address => uint256) public pendingCLRewards;
-
-    // ============ EVENTS ============
-    
-    /**
-     * @notice Emitted when a loan request is created
-     * @param requestId The ID of the created request
-     * @param borrower The address of the borrower
-     * @param amountRequested The amount of USDC requested
-     * @param requiredCollateral The minimum required collateral
-     * @param interestRate The annual interest rate in basis points
-     * @param duration The loan duration in seconds
-     */
-    event LoanRequestCreated(
-        uint256 indexed requestId, 
-        address indexed borrower,
-        uint256 amountRequested,
-        uint256 requiredCollateral,
-        uint256 interestRate,
-        uint256 duration
-    );
-    
-    /**
-     * @notice Emitted when collateral is deposited
-     */
-    event CollateralDeposited(uint256 indexed requestId, address indexed borrower, uint256 amount, uint256 totalDeposited
-);
-    
-    /**
-     * @notice Emitted when additional collateral is added to an active loan
-     */
-    event CollateralAdded(
-        uint256 indexed requestId,
-        address indexed borrower,
-        uint256 amountAdded,
-        uint256 newTotalCollateral,
-        uint256 newHealthFactor
-    );
-    
-    /**
-     * @notice Emitted when excess collateral is withdrawn
-     */
-    event ExcessCollateralWithdrawn(
-        uint256 indexed requestId,
-        address indexed borrower,
-        uint256 amountWithdrawn,
-        uint256 remainingCollateral,
-        uint256 newHealthFactor
-    );
-    
-    /**
-     * @notice Emitted when a loan is funded
-     */
-    event LoanFunded(
-        uint256 indexed requestId,
-        address indexed lender,
-        address indexed borrower,
-        uint256 amount,
-        uint256 dueDate
-    );
-    
-    /**
-     * @notice Emitted when a loan is repaid
-     */
-    event LoanRepaid(uint256 indexed requestId, address indexed borrower, uint256 totalAmount, uint256 protocolFee);
-
-    /**
-     * @notice Emitted when collateral is withdrawn after loan repayment
-     */
-    event CollateralWithdrawn(
-        uint256 indexed requestId,
-        address indexed borrower,
-        uint256 amountWithdrawn,
-        uint256 remainingCollateral
-    );
-    
-    /**
-     * @notice Emitted when a loan request is cancelled
-     */
-    event LoanRequestCancelled(uint256 indexed requestId, address indexed borrower, uint256 collateralRefunded);
-
-    /**
-     * @notice Emitted when emergency USDC withdrawal is performed
-     * @param to The address receiving the withdrawn USDC
-     * @param amount The amount of USDC withdrawn
-     */
-    event EmergencyWithdrawal(address indexed to, uint256 amount);
-
-    /**
-     * @notice Emitted when CL rewards are earned
-     * @param user The address earning the rewards
-     * @param amount The amount of CL tokens earned
-     * @param action The action that triggered the reward
-     */
-    event CLRewardsEarned(address indexed user, uint256 amount, string action);
-
-    /**
-     * @notice Emitted when CL rewards are claimed
-     * @param user The address claiming the rewards
-     * @param amount The amount of CL tokens claimed
-     */
-    event CLRewardsClaimed(address indexed user, uint256 amount);
+    mapping(uint256 => LoanRequest) public requests; /// @notice Mapping of request ID to loan request data
+    mapping(uint256 => ActiveLoan) public activeLoans; /// @notice Mapping of request ID to active loan data
+    mapping(address => uint256[]) public userRequests; /// @notice Mapping of user address to their request IDs
+    mapping(address => uint256[]) public userLoans; /// @notice Mapping of user address to their loan IDs (as lender)
+    mapping(address => uint256) public userRequestCount; /// @notice Mapping of user address to their request count
+    mapping(address => uint256) public userLoanCount; /// @notice Mapping of user address to their loan count (as lender)
+    mapping(address => uint256) public pendingCLRewards; /// @notice Mapping of user address to their pending CL rewards
     
     // ============ CONSTRUCTOR ============
     
@@ -254,7 +90,8 @@ contract ChainLend is Ownable, ReentrancyGuard {
      * @param _clToken Address of the CL token contract
      * @param _initialOwner Address of the initial owner of the contract
      */
-    constructor( address _usdcToken, address _ethPriceFeed, address _treasury, address _usdcPriceFeed, address _clToken, address _initialOwner) Ownable(_initialOwner) {
+    constructor( address _usdcToken, address _ethPriceFeed, address _treasury, address _usdcPriceFeed, address _clToken, address _initialOwner)
+     Ownable(_initialOwner) {
         if (_usdcToken == address(0)) revert ZeroAddress();
         if (_ethPriceFeed == address(0)) revert ZeroAddress();
         if (_treasury == address(0)) revert ZeroAddress();
@@ -309,10 +146,7 @@ contract ChainLend is Ownable, ReentrancyGuard {
     // ============ MAIN FUNCTIONS ============
 
     /**
-     * @notice Calculates the required collateral for a given loan amount
-     * @dev Uses Chainlink price feeds to get current ETH and USDC prices
-     * @param _loanAmount The amount of USDC to borrow
-     * @return The required collateral amount in ETH (wei)
+     * @inheritdoc IChainLend
      */
     function calculateRequiredCollateral(uint256 _loanAmount) public view returns (uint256) {
         if (_loanAmount == 0) revert ZeroAmount();
@@ -333,17 +167,9 @@ contract ChainLend is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Creates a new loan request with ETH collateral
-     * @dev Borrower must send sufficient ETH as collateral (msg.value)
-     * @param _amountRequested The amount of USDC to borrow
-     * @param _interestRate The annual interest rate in basis points
-     * @param _duration The loan duration in seconds
+     * @inheritdoc IChainLend
      */
-    function createLoanRequest(
-        uint256 _amountRequested, 
-        uint32 _interestRate, 
-        uint64 _duration
-    ) external payable nonReentrant {
+    function createLoanRequest( uint256 _amountRequested, uint32 _interestRate, uint64 _duration) external payable nonReentrant {
         
         if (_amountRequested == 0) revert ZeroAmount();
         if (msg.value == 0) revert ZeroAmount();
@@ -385,9 +211,7 @@ contract ChainLend is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Funds a loan request as a lender
-     * @dev Transfers USDC from lender to borrower and creates an active loan
-     * @param _requestId The ID of the request to fund
+     * @inheritdoc IChainLend
      */
     function fundLoan(uint256 _requestId) external nonReentrant validRequest(_requestId, RequestStatus.Pending) {
         LoanRequest storage request = requests[_requestId];
@@ -424,9 +248,7 @@ contract ChainLend is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Adds additional collateral to an active loan
-     * @dev Only the borrower can add collateral to their loan
-     * @param _requestId The ID of the loan to add collateral to
+     * @inheritdoc IChainLend
      */
     function addCollateral(uint256 _requestId) external payable nonReentrant validActiveLoan(_requestId) {
         if (msg.value == 0) revert ZeroAmount();
@@ -442,10 +264,7 @@ contract ChainLend is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Withdraws excess collateral (above 150% ratio)
-     * @dev Only the borrower can withdraw excess collateral from their active loan
-     * @param _requestId The ID of the loan
-     * @param _amount The amount of excess collateral to withdraw
+     * @inheritdoc IChainLend
      */
     function withdrawExcessCollateral(uint256 _requestId, uint256 _amount) external nonReentrant validActiveLoan(_requestId) {
         if (_amount == 0) revert ZeroAmount();
@@ -482,9 +301,7 @@ contract ChainLend is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Repays an active loan
-     * @dev Only the borrower can repay their loan. Transfers total amount due to lender and protocol fee to treasury
-     * @param _requestId The ID of the loan to repay
+     * @inheritdoc IChainLend
      */
     function repayLoan(uint256 _requestId) external nonReentrant validActiveLoan(_requestId) {
         ActiveLoan storage loan = activeLoans[_requestId];
@@ -508,9 +325,7 @@ contract ChainLend is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Withdraws collateral after loan repayment
-     * @dev Only the borrower can withdraw their collateral after repaying the loan
-     * @param _requestId The ID of the repaid loan
+     * @inheritdoc IChainLend
      */
     function withdrawCollateral(uint256 _requestId) external nonReentrant {
         if (_requestId < 1 || _requestId >= nextRequestId) {
@@ -535,9 +350,7 @@ contract ChainLend is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Cancels a pending loan request
-     * @dev Only the borrower can cancel their own pending request. Refunds the collateral
-     * @param _requestId The ID of the request to cancel
+     * @inheritdoc IChainLend
      */
     function cancelLoanRequest(uint256 _requestId) external nonReentrant {
         LoanRequest storage request = requests[_requestId];
@@ -548,8 +361,7 @@ contract ChainLend is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Claims accumulated CL token rewards
-     * @dev Mints CL tokens to the caller if they have sufficient pending rewards
+     * @inheritdoc IChainLend
      */
     function claimCLRewards() external nonReentrant {
         uint256 rewards = pendingCLRewards[msg.sender];
@@ -565,9 +377,7 @@ contract ChainLend is Ownable, ReentrancyGuard {
     // ============ GETTERS ============
 
     /**
-     * @notice Returns the health factor (collateral ratio) of an active loan
-     * @param _requestId The ID of the loan
-     * @return The current collateral ratio in basis points
+     * @inheritdoc IChainLend
      */
     function getHealthFactor(uint256 _requestId) external view returns (uint256) {
         if (activeLoans[_requestId].status != LoanStatus.Active) {
@@ -577,10 +387,7 @@ contract ChainLend is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Checks if a loan is at risk of liquidation
-     * @param _requestId The ID of the loan to check
-     * @return atRisk True if the loan is below the warning threshold
-     * @return currentRatio The current collateral ratio
+     * @inheritdoc IChainLend
      */
     function isAtRiskOfLiquidation(uint256 _requestId) external view returns (bool atRisk, uint256 currentRatio) {
         if (activeLoans[_requestId].status != LoanStatus.Active) {
@@ -591,9 +398,7 @@ contract ChainLend is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Calculates the amount of excess collateral that can be withdrawn
-     * @param _requestId The ID of the loan
-     * @return excessAmount The amount of excess collateral in wei
+     * @inheritdoc IChainLend
      */
     function getExcessCollateral(uint256 _requestId) external view returns (uint256 excessAmount) {
         if (activeLoans[_requestId].status != LoanStatus.Active) {
@@ -609,9 +414,7 @@ contract ChainLend is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Returns loan request data
-     * @param _requestId The ID of the request
-     * @return The loan request struct
+     * @inheritdoc IChainLend
      */
     function getLoanRequest(uint256 _requestId) external view returns (LoanRequest memory) {
         if (_requestId < 1 || _requestId >= nextRequestId) {
@@ -624,9 +427,7 @@ contract ChainLend is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Returns active loan data
-     * @param _requestId The ID of the loan
-     * @return The active loan struct
+     * @inheritdoc IChainLend
      */
     function getActiveLoan(uint256 _requestId) external view returns (ActiveLoan memory) {
         if (_requestId < 1 || _requestId >= nextRequestId) {
@@ -639,29 +440,21 @@ contract ChainLend is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Returns all request IDs for a user
-     * @param _user The address of the user
-     * @return Array of request IDs created by the user
+     * @inheritdoc IChainLend
      */
     function getUserRequests(address _user) external view returns (uint256[] memory) {
         return userRequests[_user];
     }
 
     /**
-     * @notice Returns all loan IDs where user is the lender
-     * @param _user The address of the user
-     * @return Array of loan IDs where the user is the lender
+     * @inheritdoc IChainLend
      */
     function getUserLoans(address _user) external view returns (uint256[] memory) {
         return userLoans[_user];
     }
 
     /**
-     * @notice Returns pending request IDs with pagination
-     * @param _offset The starting index for pagination
-     * @param _limit The maximum number of results to return (max 100)
-     * @return pendingIds Array of pending request IDs
-     * @return hasMore True if there are more results beyond this page
+     * @inheritdoc IChainLend
      */
     function getPendingRequests(uint256 _offset, uint256 _limit) external view returns (uint256[] memory pendingIds, bool hasMore) {
         if (_limit == 0 || _limit > 100) revert InvalidParameter("limit", _limit);
@@ -697,8 +490,7 @@ contract ChainLend is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Returns the total count of pending requests
-     * @return count The number of pending requests
+     * @inheritdoc IChainLend
      */
     function getPendingRequestsCount() external view returns (uint256 count) {
         for (uint256 i = 1; i < nextRequestId; i++) {
@@ -709,11 +501,7 @@ contract ChainLend is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Checks if collateral can be withdrawn for a request
-     * @param _requestId The ID of the request
-     * @return canWithdraw True if collateral can be withdrawn
-     * @return collateralAmount The amount of collateral available
-     * @return reason Human-readable reason if withdrawal is not possible
+     * @inheritdoc IChainLend
      */
     function canWithdrawCollateral(uint256 _requestId) external view returns (bool canWithdraw, uint256 collateralAmount, string memory reason) {
         if (_requestId < 1 || _requestId >= nextRequestId) {
@@ -741,11 +529,7 @@ contract ChainLend is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Returns protocol statistics
-     * @return totalRequests Total number of requests created
-     * @return activeRequests Number of active (pending) requests
-     * @return activeLoansCount Number of active loans
-     * @return totalVolumeUSDC Total volume of USDC lent through the protocol
+     * @inheritdoc IChainLend
      */
     function getProtocolStats() external view returns (
         uint256 totalRequests,
@@ -765,21 +549,6 @@ contract ChainLend is Ownable, ReentrancyGuard {
     }
 
     // ============ INTERNAL FUNCTIONS ============
-
-    /**
-     * @dev Safely transfers ETH to an address
-     * @param to The recipient address
-     * @param amount The amount to transfer
-     * @param revertOnFail Whether to revert if transfer fails
-     */
-    function _safeTransferETH(address to, uint256 amount, bool revertOnFail) internal {
-        if (amount > 0) {
-            (bool success, ) = payable(to).call{value: amount}("");
-            if (!success && revertOnFail) {
-                revert TransferFailed("ETH transfer failed");
-            }
-        }
-    }
 
     /**
      * @dev Calculates the current collateral ratio for an active loan
@@ -840,9 +609,7 @@ contract ChainLend is Ownable, ReentrancyGuard {
     // ============ ADMIN FUNCTIONS ============
 
     /**
-     * @notice Updates the treasury address
-     * @dev Only the contract owner can update the treasury
-     * @param _newTreasury The new treasury address
+     * @inheritdoc IChainLend
      */
     function updateTreasury(address _newTreasury) external onlyOwner {
         if (_newTreasury == address(0)) revert ZeroAddress();
@@ -850,10 +617,7 @@ contract ChainLend is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Emergency withdrawal of USDC from the contract
-     * @dev Only the contract owner can perform emergency withdrawals
-     * @param _to The address to send the USDC to
-     * @param _amount The amount of USDC to withdraw
+     * @inheritdoc IChainLend
      */
     function emergencyWithdrawUSDC(address _to, uint256 _amount) external onlyOwner {
         if (_to == address(0)) revert ZeroAddress();

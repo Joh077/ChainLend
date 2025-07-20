@@ -6,12 +6,11 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @title CLToken - ChainLend Token
- * @author ChainLend Team
+ * @author Johan L.
  * @notice ERC20 token used for rewards and future governance in the ChainLend protocol
  * @dev This token has a maximum supply and only authorized minters can create new tokens
  */
 contract CLToken is ERC20, Ownable {
-    
     
     error NotMinter(address caller);
     error MaxSupplyExceeded(uint256 currentSupply, uint256 mintAmount, uint256 maxSupply);
