@@ -1,5 +1,4 @@
-
-// Adresses des contrats déployés sur localhost persistant (ETH à 3000$)
+// Adresses des contrats déployés sur localhost
 export const contractAddress = "0xa5100dFD6C966aC60a8E497a3545B49B12Dd45BC";
 export const usdcAddress = "0x294A36De92F6750714C36D9b4102288191ECcA97";
 export const clTokenAddress = "0xe539FFF59EB1C136fabb1bc45bE9D441ec0F3899";

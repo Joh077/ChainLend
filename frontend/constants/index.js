@@ -5,6 +5,12 @@ export const clTokenAddress = "0xBF0eDBd4DD4095fFadd91E80F76f7A468C79C1Ee";
 export const ethPriceFeedAddress = "0x5f4ec3df9cbd43714fe2740f5e3616155c5b8419";
 export const usdcPriceFeedAddress = "0x8fffffd4afb6115b954bd326cbe7b4ba576818f6";
 
+
+// Configuration réseau Base mainnet
+// export const targetChainId = 8453;
+// export const networkName = "Base";
+// export const blockExplorer = "https://basescan.org";
+
 // ABI COMPLET pour ChainLend
 export const contractAbi = [
   {

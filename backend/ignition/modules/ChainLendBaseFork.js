@@ -10,7 +10,7 @@ module.exports = buildModule("ChainLendModule", (m) => {
   const treasury = m.getAccount(0);
   const owner = m.getAccount(0);
 
-  // Deploy CLToken first
+  // Deploy CLToken 
   const clToken = m.contract("CLToken", [owner]);
   
   // Deploy ChainLend main contract
@@ -29,7 +29,6 @@ module.exports = buildModule("ChainLendModule", (m) => {
   return { 
     clToken, 
     chainLend,
-    // Export addresses for verification
     config: {
       usdc: usdcAddress,
       ethFeed: ethPriceFeed,

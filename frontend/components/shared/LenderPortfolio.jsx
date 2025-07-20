@@ -55,7 +55,7 @@ export function LenderPortfolio() {
         args: [BigInt(loanId)],
       });
 
-      // Récupère le health factor seulement si le prêt est actif
+      // Récupère le health factor si le prêt est actif
       let healthFactor = null;
       const loanStatus = Number(activeLoanData.status);
       
@@ -74,7 +74,7 @@ export function LenderPortfolio() {
         } catch (healthError) {
         }
       } else {
-        return null; // Ne pas traiter les prêts non actifs
+        return null; 
       }
       return { activeLoanData, requestData, healthFactor };  
     } catch (error) {

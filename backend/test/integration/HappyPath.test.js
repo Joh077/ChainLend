@@ -47,7 +47,7 @@ describe("ChainLend Happy Path on Base Fork", function() {
     const whaleBalance = await usdc.balanceOf(whale);
     console.log("Whale USDC balance:", ethers.formatUnits(whaleBalance, 6));
     
-    // Transfer 50,000 USDC to lender (enough for 10k loan + buffer)
+    // Transfer 50,000 USDC to lender
     const transferAmount = ethers.parseUnits("50000", 6);
     console.log("Transfert de ", ethers.formatUnits(transferAmount, 6), "USDC au lender");
     
@@ -56,8 +56,6 @@ describe("ChainLend Happy Path on Base Fork", function() {
     
     const lenderBalance = await usdc.balanceOf(lender.address);
     console.log("Lender USDC balance après transfer:", ethers.formatUnits(lenderBalance, 6));
-    
-    // Verify transfer worked
     expect(lenderBalance).to.be.gte(transferAmount);
   });
 

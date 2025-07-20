@@ -43,6 +43,12 @@ module.exports = {
       gas: 30000000,
       initialBaseFeePerGas: 0,
     },
+    // base: {
+    //   url: "https://mainnet.base.org",
+    //   accounts: [process.env.PRIVATE_KEY_BASE],
+    //   chainId: 8453,
+    //   gasPrice: 1000000000, // 1 gwei
+    // }
   },
   etherscan: {
     apiKey: ETHERSCAN

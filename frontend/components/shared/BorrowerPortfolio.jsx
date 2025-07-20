@@ -556,7 +556,7 @@ export function BorrowerPortfolio() {
         </CardHeader>
       </Card>
       
-      {/* Demandes en attente - AVEC BOUTON ANNULER */}
+      {/* Demandes en attente */}
       {pendingRequests.length > 0 && (
         <Card className="bg-zinc-900 border-zinc-700 shadow-xl">
           <CardHeader className="pb-4">
@@ -649,7 +649,7 @@ export function BorrowerPortfolio() {
                 <div key={loan.id} className="bg-zinc-800 rounded-xl p-6 border border-zinc-700">
                   <div className="grid grid-cols-12 gap-6 items-center">
                     
-                    {/* Info prêt (4 cols) */}
+                    {/* Info prêt */}
                     <div className="col-span-4 flex items-center space-x-4">
                       <div className="w-12 h-12 bg-teal-500 rounded-full flex items-center justify-center">
                         <span className="text-black font-bold text-sm">#{loan.id}</span>
@@ -660,7 +660,7 @@ export function BorrowerPortfolio() {
                       </div>
                     </div>
 
-                    {/* Montants (4 cols) */}
+                    {/* Montants */}
                     <div className="col-span-4 grid grid-cols-2 gap-4">
                       <div className="text-center bg-zinc-900 rounded-lg p-3">
                         <p className="text-white font-bold">{loan.principalFormatted}</p>
@@ -672,7 +672,7 @@ export function BorrowerPortfolio() {
                       </div>
                     </div>
 
-                    {/* Actions (4 cols) */}
+                    {/* Actions  */}
                     <div className="col-span-4 text-right">
                       <div className={`inline-block px-3 py-1 rounded-full text-white text-sm font-medium mb-2 ${getStatusColor(loan)}`}>
                         {loan.status}
@@ -680,7 +680,7 @@ export function BorrowerPortfolio() {
                       <p className="text-gray-400 text-sm">Échéance: {loan.dueDateFormatted}</p>
                       <p className="text-gray-400 text-sm mb-3">{loan.daysRemaining} jours restants</p>
                       
-                      {/* Bouton remboursement seulement */}
+                      {/* Bouton remboursement */}
                       <Button 
                         onClick={() => handleRepayLoan(loan)}
                         disabled={isProcessing || isApproving}
