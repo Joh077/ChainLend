@@ -60,43 +60,6 @@ A complete decentralized peer-to-peer lending application built on Base mainnet 
 - Roadmap
 - Author
 
-## 📸 Screenshots
-
-### 🎯 Create Loan Request
-
-Users can create loan requests with ETH collateral and competitive interest rates.
-
-![Create Loan Request](screenshots/create-request.png)
-
-### 🏆 CL Token Rewards
-
-Earn CL tokens for every protocol interaction - creating requests, funding loans, and repaying on time.
-
-![CL Token Rewards](screenshots/cl-tokens.png)
-
-### 🏪 Marketplace
-
-Browse and fund loan requests with transparent pricing and detailed analytics.
-
-![Marketplace](screenshots/marketplace.png)
-
-### 📊 Dashboard
-
-Track your investments, protocol statistics, and portfolio performance.
-
-![Dashboard](screenshots/dashboard.png)
-
-### 💼 Active Loans
-
-Monitor loan performance, health factors, and upcoming repayments.
-
-![Active Loans](screenshots/active-loans.png)
-
-### 🔧 Loan Management
-
-Manage repayments, collateral, and loan lifecycle with ease.
-
-![Loan Management](screenshots/loan-management.png)
 
 ## ✨ Features
 
