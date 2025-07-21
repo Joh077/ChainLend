@@ -4,65 +4,56 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { contractAddress, contractAbi, usdcAddress, usdcAbi } from '@/constants';
+
 import { useReadContract, useAccount } from 'wagmi';
 import { formatUnits, formatEther, parseUnits } from 'viem';
+
 import { toast } from 'sonner';
 import FundingConfirmationSheet from '@/components/shared/FundingConfirmationSheet';
 import { publicClient } from '@/utils/client';
 
 export function HomeMarketPlace() {
+  // States pour les demandes et l'affichage
   const [loanRequests, setLoanRequests] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [useAlternativeMethod, setUseAlternativeMethod] = useState(false);
   
+  // States pour la sheet de financement
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
 
+  // Adresse wallet et statut connexion
   const { address, isConnected } = useAccount();
 
+  // Hook pour lire les demandes pending
   const { data: pendingRequests, isError: isPendingError, error: pendingError, refetch } = useReadContract({
     address: contractAddress,
     abi: contractAbi,
     functionName: 'getPendingRequests',
     args: [0, 50],
     query: {
-      enabled: isConnected && !useAlternativeMethod,
+      enabled: isConnected,
       refetchInterval: 15000,
     }
   });
 
-  const { data: nextRequestId, isError: isNextIdError } = useReadContract({
-    address: contractAddress,
-    abi: contractAbi,
-    functionName: 'nextRequestId',
-    query: {
-      enabled: isConnected && (useAlternativeMethod || isPendingError),
-      refetchInterval: 15000,
-    }
-  });
-
+  // Hook pour lire le solde USDC de l'utilisateur
   const { data: usdcBalance } = useReadContract({
     address: usdcAddress,
     abi: usdcAbi,
     functionName: 'balanceOf',
     args: address ? [address] : undefined,
     query: {
-      enabled: !!address,
+      enabled: !!address, //seulement si wallet connecté
       refetchInterval: 10000,
     }
   });
 
-  useEffect(() => {
-    if (isPendingError && !useAlternativeMethod) {
-      setUseAlternativeMethod(true);
-      toast.info('Chargement des demandes');
-    }
-  }, [isPendingError, pendingError, useAlternativeMethod]);
-
+  // Fonction pour récupérer les détails d'une demande
   const fetchLoanRequestDetails = async (requestId) => {
     try {
-      const { readContract } = await import('viem/actions');
-      
+
+      //Hook viem pour itéré par requestId
+      const { readContract } = await import('viem/actions'); 
       const requestData = await readContract(publicClient, {
         address: contractAddress,
         abi: contractAbi,
@@ -77,6 +68,7 @@ export function HomeMarketPlace() {
     }
   };
 
+  // Fonction pour formater les données d'une demande
   const formatRequestData = (requestData) => {
     try {
       if (!requestData || !requestData.amountRequested || !requestData.borrower) {
@@ -123,101 +115,14 @@ export function HomeMarketPlace() {
     }
   };
 
-  useEffect(() => {
-    const loadRequestDetailsMain = async () => {
-      if (!pendingRequests || !pendingRequests[0] || pendingRequests[0].length === 0) {
-        setLoanRequests([]);
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        const requestIds = pendingRequests[0];
-        const requests = [];
-        
-        for (let i = 0; i < requestIds.length; i++) {
-          const requestId = Number(requestIds[i]);
-          
-          try {
-            const requestDetails = await fetchLoanRequestDetails(requestId);
-            
-            if (requestDetails && 
-                requestDetails.borrower && 
-                requestDetails.borrower !== "0x0000000000000000000000000000000000000000") {
-              
-              const formattedRequest = formatRequestData(requestDetails);
-              if (formattedRequest) {
-                requests.push(formattedRequest);
-              }
-            }
-          } catch (error) {
-          }
-        }
-
-        setLoanRequests(requests);
-      } catch (error) {
-        setLoanRequests([]);
-        toast.error('Erreur lors du chargement des demandes');
-      }
-      
-      setIsLoading(false);
-    };
-
-    if (pendingRequests && isConnected && !useAlternativeMethod) {
-      loadRequestDetailsMain();
-    }
-  }, [pendingRequests, address, isConnected, useAlternativeMethod]);
-
-  useEffect(() => {
-    const loadRequestDetailsAlternative = async () => {
-      if (!nextRequestId || !isConnected) {
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        const requests = [];
-        const currentId = Number(nextRequestId);
-        const startId = Math.max(1, currentId - 20);
-        
-        for (let requestId = startId; requestId < currentId; requestId++) {
-          try {
-            const requestDetails = await fetchLoanRequestDetails(requestId);
-            
-            if (requestDetails && 
-                requestDetails.borrower && 
-                requestDetails.borrower !== "0x0000000000000000000000000000000000000000" &&
-                Number(requestDetails.status) === 0) {
-              
-              const formattedRequest = formatRequestData(requestDetails);
-              if (formattedRequest) {
-                requests.push(formattedRequest);
-              }
-            }
-          } catch (error) {
-          }
-        }
-
-        setLoanRequests(requests.reverse());
-      } catch (error) {
-        setLoanRequests([]);
-        toast.error('Erreur lors du chargement avec la méthode alternative');
-      }
-      
-      setIsLoading(false);
-    };
-
-    if (useAlternativeMethod && nextRequestId && isConnected) {
-      loadRequestDetailsAlternative();
-    }
-  }, [nextRequestId, address, isConnected, useAlternativeMethod]);
-
+  // Vérification de l'éligibilité au financement
   const checkFundingEligibility = (request) => {
     if (!usdcBalance || usdcBalance === undefined) {
       return { canFund: false, reason: 'Chargement du solde...' };
     }
     
     const requiredAmount = parseUnits(request.amountRaw.toString(), 6);
+    //bool
     const hasBalance = usdcBalance >= requiredAmount;
     
     if (!hasBalance) {
@@ -230,6 +135,7 @@ export function HomeMarketPlace() {
     return { canFund: true, reason: '' };
   };
 
+  // Ouvrir la sheet de financement
   const handleOpenFundingSheet = (request) => {
     if (!isConnected) {
       toast.error('Veuillez connecter votre wallet');
@@ -252,51 +158,84 @@ export function HomeMarketPlace() {
     setIsSheetOpen(true);
   };
 
+  // Fermer la sheet de financement
   const handleCloseSheet = () => {
     setIsSheetOpen(false);
     setSelectedRequest(null);
   };
 
+  // Callback après financement réussi
   const handleFundingSuccess = (requestId) => {
     setTimeout(() => {
-      if (!useAlternativeMethod) {
-        refetch();
-      } 
-      else {
-        window.location.reload();
-      }
+      refetch();
     }, 2000);
   };
 
-  const getTimeAgo = (timestamp) => {
-    const now = Math.floor(Date.now() / 1000);
-    const diff = now - timestamp;
-    
-    if (diff < 3600) return `${Math.floor(diff / 60)}min`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
-    return `${Math.floor(diff / 86400)}j`;
-  };
+  /** 
+      Transforme une liste d'IDs récupérée par getPendingRequests en demandes 
+      complètes affichables, en appelant individuellement getLoanRequest pour 
+      chaque ID
+  **/
+  useEffect(() => {
+    const loadRequestDetails = async () => {
+      //Si tableau vide return
+      if (!pendingRequests || !pendingRequests[0] || pendingRequests[0].length === 0) {
+        setLoanRequests([]);
+        setIsLoading(false);
+        return;
+      }
 
-  if (isPendingError && isNextIdError) {
+      try {
+        const requestIds = pendingRequests[0];
+        const requests = [];
+        
+        for (let i = 0; i < requestIds.length; i++) {
+          const requestId = Number(requestIds[i]);
+          
+          try {
+            // return objet complet si demande existe
+            const requestDetails = await fetchLoanRequestDetails(requestId);
+            
+            if (requestDetails && 
+                requestDetails.borrower && 
+                requestDetails.borrower !== "0x0000000000000000000000000000000000000000") {
+              
+              const formattedRequest = formatRequestData(requestDetails); // Transforme données brutes en objet UI-ready
+              if (formattedRequest) {
+                requests.push(formattedRequest); // Ajoute à la collection
+              }
+            }
+          } catch (error) {
+          }
+        }
+
+        setLoanRequests(requests);
+      } catch (error) {
+        setLoanRequests([]);
+        toast.error('Erreur lors du chargement des demandes');
+      }
+      
+      setIsLoading(false);
+    }; 
+
+    // Conditions d'exécution 
+    if (pendingRequests && isConnected) {
+      loadRequestDetails();
+    }
+  }, [pendingRequests, address, isConnected]);
+
+  // Gestion des erreurs de chargement
+  if (isPendingError) {
     return (
       <Card className="bg-zinc-900 border-zinc-700 m-4 mt-8">
         <CardContent className="p-6">
           <div className="text-center text-red-400">
             Erreur lors du chargement des demandes
             <p className="text-sm text-gray-400 mt-2">
-              {useAlternativeMethod ? 
-                `Méthode alternative échoué: ${isNextIdError?.message}` : 
-                `Méthode principale échouée: ${pendingError?.message}`
-              }
+              {pendingError?.message}
             </p>
             <Button 
-              onClick={() => {
-                if (!useAlternativeMethod) {
-                  refetch();
-                } else {
-                  window.location.reload();
-                }
-              }} 
+              onClick={() => refetch()} 
               className="mt-4 bg-red-600 hover:bg-red-500"
               size="sm"
             >
@@ -308,23 +247,20 @@ export function HomeMarketPlace() {
     );
   }
 
+  // État de chargement
   if (isLoading) {
     return (
       <Card className="bg-zinc-900 border-zinc-700 m-4 mt-8">
         <CardHeader>
           <CardTitle className="font-rasputin text-white text-xl">MarketPlace - Nouvelles demandes</CardTitle>
           <p className="text-gray-400 text-sm">
-            Chargement des demandes disponibles... 
-            {useAlternativeMethod && <span className="text-yellow-400">(Méthode alternative)</span>}
+            Chargement des demandes disponibles...
           </p>
         </CardHeader>
         <CardContent className="p-6">
           <div className="text-center text-gray-400">
             <div className="animate-spin w-8 h-8 border-2 border-teal-400 border-t-transparent rounded-full mx-auto mb-4"></div>
-            {useAlternativeMethod ? 
-              'Chargement via méthode alternative...' : 
-              'Chargement des demandes depuis la blockchain...'
-            }
+            Chargement des demandes depuis la blockchain...
           </div>
         </CardContent>
       </Card>
@@ -334,12 +270,11 @@ export function HomeMarketPlace() {
   return (
     <div className="w-full max-w-none mx-auto px-6 py-4">
       <Card className="bg-zinc-900 border-zinc-700 shadow-xl">
+        
+        {/* Header de la marketplace */}
         <CardHeader className="pb-6">
           <CardTitle className="font-rasputin text-white text-2xl font-bold">
             MarketPlace - Nouvelles demandes
-            {useAlternativeMethod && (
-              <span className="text-yellow-400 text-sm ml-2">(Mode alternatif)</span>
-            )}
           </CardTitle>
           <div className="flex justify-between items-center mt-4">
             <p className="text-gray-400 text-base">
@@ -348,6 +283,7 @@ export function HomeMarketPlace() {
                 : "Aucune demande disponible pour le moment"
               }
             </p>
+            {/* Affichage du solde USDC */}
             {usdcBalance && (
               <div className="bg-teal-900/30 border border-teal-600 rounded-lg px-4 py-2">
                 <p className="text-teal-300 text-sm font-medium">
@@ -356,24 +292,16 @@ export function HomeMarketPlace() {
               </div>
             )}
           </div>
-          {useAlternativeMethod && (
-            <div className="bg-yellow-900/20 border border-yellow-600 rounded-lg p-3 mt-4">
-              <p className="text-yellow-300 text-sm">
-                Mode alternatif activé - Affichage des 20 dernières demandes créées
-              </p>
-            </div>
-          )}
         </CardHeader>
+        
         <CardContent className="space-y-6 px-6 pb-6">
+          {/* Liste des demandes */}
           {loanRequests.length === 0 ? (
             <div className="text-center py-12">
               <div className="text-gray-400 text-3xl mb-4"></div>
               <p className="text-gray-400 text-lg">Aucune demande de prêt disponible</p>
               <p className="text-gray-500 mt-3">
-                {useAlternativeMethod ? 
-                  'Essayez de créer une demande de prêt ou rafraîchissez la page' :
-                  'Soyez le premier à créer une demande de prêt !'
-                }
+                Soyez le premier à créer une demande de prêt !
               </p>
             </div>
           ) : (
@@ -382,6 +310,7 @@ export function HomeMarketPlace() {
               return (
                 <div key={request.id} className="flex items-center justify-between py-6 px-6 bg-zinc-800 rounded-lg">
                   
+                  {/* Informations de l'emprunteur */}
                   <div className="flex items-center space-x-4 w-80">
                     <div className="w-12 h-12 bg-teal-500 rounded-full flex items-center justify-center flex-shrink-0">
                       <span className="text-black font-bold text-sm">{request.avatar}</span>
@@ -402,6 +331,7 @@ export function HomeMarketPlace() {
                     </div>
                   </div>
 
+                  {/* Détails financiers de la demande */}
                   <div className="flex items-center space-x-32 flex-1 justify-center mr-16">
                     <div className="text-center">
                       <div className="text-white font-bold text-xl">{request.amount}</div>
@@ -417,6 +347,7 @@ export function HomeMarketPlace() {
                     </div>
                   </div>
 
+                  {/* Actions et rendement */}
                   <div className="w-40 flex flex-col space-y-2">
                     <Button 
                       className={`w-full py-3 rounded-full font-semibold text-sm ${
@@ -430,6 +361,7 @@ export function HomeMarketPlace() {
                       {!request.canFund ? 'Votre demande' : 'Prêter'}
                     </Button>
 
+                    {/* Calcul du rendement net */}
                     {request.canFund && (
                       <div className="text-center mt-2 p-2 bg-green-900/20 border border-green-700/50 rounded-lg">
                         <div className="text-green-400 font-bold text-sm">
@@ -447,6 +379,7 @@ export function HomeMarketPlace() {
                       </div>
                     )}
 
+                    {/* Message pour ses propres demandes */}
                     {request.isOwnRequest && (
                       <div className="text-center mt-2 p-2 bg-blue-900/20 border border-blue-700/50 rounded-lg">
                         <div className="text-blue-400 text-xs">
@@ -465,6 +398,7 @@ export function HomeMarketPlace() {
         </CardContent>
       </Card>
 
+      {/* Sheet de confirmation de financement */}
       <FundingConfirmationSheet
         isOpen={isSheetOpen}
         onClose={handleCloseSheet}

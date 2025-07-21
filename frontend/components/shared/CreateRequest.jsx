@@ -6,31 +6,33 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
 import { contractAddress, contractAbi } from '@/constants';
 import { useReadContract, useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { parseUnits, formatUnits, formatEther } from 'viem';
+
 import { toast } from 'sonner';
 
 export default function CreateRequest() {
   // States du formulaire
-  const [amount, setAmount] = useState('');
+  const [amount, setAmount] = useState(''); 
   const [interestRate, setInterestRate] = useState('');
   const [duration, setDuration] = useState('');
-  const [description, setDescription] = useState('');
   const [requiredCollateral, setRequiredCollateral] = useState('0');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); 
   
   // States pour les toasts
-  const [transactionToastId, setTransactionToastId] = useState(null);
+  const [transactionToastId, setTransactionToastId] = useState(null); 
   const [currentRequestData, setCurrentRequestData] = useState(null);
 
   // States pour les calculs d'intérêts
   const [totalInterest, setTotalInterest] = useState('0');
-  const [totalDebt, setTotalDebt] = useState('0');
+  const [totalDebt, setTotalDebt] = useState('0'); 
 
+  //Adresse wallet et statut connexion
   const { address, isConnected } = useAccount();
 
-  // Hook pour écrire dans le contrat
+  // Hook pour écrire/executer tx dans le contrat
   const { data: hash, error: writeError, isPending: isWritePending, writeContract } = useWriteContract();
 
   // Hook pour attendre la confirmation de transaction
@@ -48,25 +50,127 @@ export default function CreateRequest() {
     address: contractAddress,
     abi: contractAbi,
     functionName: 'calculateRequiredCollateral',
-    args: amount ? [parseUnits(amount, 6)] : undefined,
+    args: amount ? [parseUnits(amount, 6)] : undefined, // USDC a 6 décimales pour le contrat
     query: {
       enabled: !!amount && amount > 0,
     }
   });
 
+  // Validation du formulaire
+  const validateForm = () => {
+    if (!amount || parseFloat(amount) <= 0) {
+      toast.error('Veuillez entrer un montant valide');
+      return false;
+    }
+
+    if (!interestRate || parseFloat(interestRate) < 5 || parseFloat(interestRate) > 15) {
+      toast.error('Le taux d\'intérêt doit être entre 5% et 15%');
+      return false;
+    }
+
+    if (!duration) {
+      toast.error('Veuillez sélectionner une durée');
+      return false;
+    }
+
+    // Vérifier le montant maximum
+    if (maxLoanAmount && parseUnits(amount, 6) > maxLoanAmount) {
+      toast.error(`Le montant maximum autorisé est ${formatUnits(maxLoanAmount, 6)} USDC`);
+      return false;
+    }
+
+    return true;
+  };
+
+  // Soumission du formulaire
+  const handleSubmit = async (e) => {
+    e.preventDefault(); // Empêche rechargement de page
+    
+    if (!isConnected) {
+      toast.error('Veuillez connecter votre wallet');
+      return;
+    }
+
+    if (!validateForm()) return;
+
+    try {
+      setIsLoading(true);
+      
+      // Conversion des valeurs 
+      const amountInUsdcUnit = parseUnits(amount, 6);
+      const rateInBasisPoints = Math.round(parseFloat(interestRate) * 100);
+      const durationInSeconds = parseInt(duration) * 24 * 3600;
+      
+      if (rateInBasisPoints > 15000) {
+        toast.error('Taux trop élevé pour le contrat');
+        setIsLoading(false);
+        return;
+      }
+
+      if (!collateralData) {
+        toast.error('Impossible de calculer le collatéral requis');
+        setIsLoading(false);
+        return;
+      }
+
+      // Sauvegarder les données de la demande pour les toasts
+      setCurrentRequestData({
+        amount: amount,
+        collateral: parseFloat(formatEther(collateralData)).toFixed(4),
+        rate: interestRate,
+        duration: duration
+      });
+
+      // TOAST "TRANSACTION EN COURS"
+      const toastId = toast.loading('Transaction en cours...', {
+        description: 'Veuillez confirmer la transaction dans votre wallet'
+      });
+      setTransactionToastId(toastId);
+
+      // LANCER LA TRANSACTION
+      writeContract({
+        address: contractAddress,
+        abi: contractAbi,
+        functionName: 'createLoanRequest',
+        args: [amountInUsdcUnit, rateInBasisPoints, durationInSeconds],
+        value: collateralData,
+        gas: 500000n,
+      });
+
+    } catch (error) {
+      console.error('Erreur lors de la soumission:', error);
+      
+      // Fermer le toast en cours s'il existe
+      if (transactionToastId) {
+        toast.dismiss(transactionToastId);
+        setTransactionToastId(null);
+      }
+      
+      let errorMessage = 'Erreur lors de la création de la demande';
+      
+      toast.error(errorMessage);
+      setIsLoading(false);
+      setCurrentRequestData(null);
+    }
+  };
+
+  // État de chargement global --> Si Submitting enable le formulaire
+  const isSubmitting = isLoading || isWritePending || isConfirming;
+
+
   // Mettre à jour le collatéral quand le montant change
   useEffect(() => {
     if (collateralData) {
-      setRequiredCollateral(formatEther(collateralData));
+      setRequiredCollateral(formatEther(collateralData)); // Conversion wei en ETH
     } else {
       setRequiredCollateral('0');
     }
   }, [collateralData]);
 
-  // Calcul des intérêts en temps réel
+  // Calcul des intérêts en temps réel (Pour UI)
   useEffect(() => {
     if (amount && interestRate && duration) {
-      const principal = parseFloat(amount);
+      const principal = parseFloat(amount); //Converti la string en floatNumber
       const rate = parseFloat(interestRate);
       const durationDays = parseInt(duration);
       
@@ -78,11 +182,8 @@ export default function CreateRequest() {
         
         setTotalInterest(totalInterestAmount.toFixed(2));
         setTotalDebt(totalDebtAmount.toFixed(2));
-      } else {
-        setTotalInterest('0');
-        setTotalDebt('0');
-      }
-    } else {
+        return;
+      } 
       setTotalInterest('0');
       setTotalDebt('0');
     }
@@ -113,7 +214,6 @@ export default function CreateRequest() {
         setAmount('');
         setInterestRate('');
         setDuration('');
-        setDescription('');
         setIsLoading(false);
         setCurrentRequestData(null);
       }, 2000);
@@ -129,16 +229,6 @@ export default function CreateRequest() {
       
       // Messages d'erreur spécifiques
       let errorMessage = 'Erreur lors de la création de la demande';
-      
-      if (writeError.message.includes('insufficient funds')) {
-        errorMessage = 'Fonds insuffisants pour la transaction';
-      } else if (writeError.message.includes('InsufficientCollateral')) {
-        errorMessage = 'Collatéral insuffisant envoyé';
-      } else if (writeError.message.includes('InvalidParameter')) {
-        errorMessage = 'Paramètres invalides (vérifiez le taux et la durée)';
-      } else if (writeError.message.includes('user rejected')) {
-        errorMessage = 'Transaction annulée par l\'utilisateur';
-      }
       
       toast.error(errorMessage, {
         description: 'Veuillez réessayer ou vérifier vos paramètres'
@@ -163,126 +253,11 @@ export default function CreateRequest() {
     }
   }, [isConfirming, isConfirmed, transactionToastId]);
 
-  // Validation du formulaire
-  const validateForm = () => {
-    if (!amount || parseFloat(amount) <= 0) {
-      toast.error('Veuillez entrer un montant valide');
-      return false;
-    }
-
-    if (!interestRate || parseFloat(interestRate) < 5 || parseFloat(interestRate) > 15) {
-      toast.error('Le taux d\'intérêt doit être entre 5% et 15%');
-      return false;
-    }
-
-    if (!duration) {
-      toast.error('Veuillez sélectionner une durée');
-      return false;
-    }
-
-    // Vérifier le montant maximum
-    if (maxLoanAmount && parseUnits(amount, 6) > maxLoanAmount) {
-      toast.error(`Le montant maximum autorisé est ${formatUnits(maxLoanAmount, 6)} USDC`);
-      return false;
-    }
-
-    return true;
-  };
-
-  // Soumission du formulaire
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!isConnected) {
-      toast.error('Veuillez connecter votre wallet');
-      return;
-    }
-
-    if (!validateForm()) return;
-
-    try {
-      setIsLoading(true);
-      
-      // Conversion des valeurs 
-      const amountInWei = parseUnits(amount, 6);
-      const rateInBasisPoints = Math.round(parseFloat(interestRate) * 100);
-      const durationInSeconds = parseInt(duration) * 24 * 3600;
-      
-      // Vérifications de sécurité Overflow
-      // 65535 = limite uint16 (taux en basis points)
-      if (rateInBasisPoints > 65535) {
-        toast.error('Taux trop élevé pour le contrat');
-        setIsLoading(false);
-        return;
-      }
-      
-      //4294967295 = limite uint32 (durée en secondes)
-      if (durationInSeconds > 4294967295) {
-        toast.error('Durée trop longue pour le contrat');
-        setIsLoading(false);
-        return;
-      }
-
-      if (!collateralData) {
-        toast.error('Impossible de calculer le collatéral requis');
-        setIsLoading(false);
-        return;
-      }
-
-      // Sauvegarder les données de la demande pour les toasts
-      setCurrentRequestData({
-        amount: amount,
-        collateral: parseFloat(formatEther(collateralData)).toFixed(4),
-        rate: interestRate,
-        duration: duration
-      });
-
-      // TOAST "TRANSACTION EN COURS"
-      const toastId = toast.loading('Transaction en cours...', {
-        description: 'Veuillez confirmer la transaction dans votre wallet'
-      });
-      setTransactionToastId(toastId);
-
-      // LANCER LA TRANSACTION
-      writeContract({
-        address: contractAddress,
-        abi: contractAbi,
-        functionName: 'createLoanRequest',
-        args: [amountInWei, rateInBasisPoints, durationInSeconds],
-        value: collateralData,
-        gas: 500000n,
-      });
-
-    } catch (error) {
-      console.error('Erreur lors de la soumission:', error);
-      
-      // Fermer le toast en cours s'il existe
-      if (transactionToastId) {
-        toast.dismiss(transactionToastId);
-        setTransactionToastId(null);
-      }
-      
-      let errorMessage = 'Erreur lors de la création de la demande';
-      
-      if (error.message.includes('insufficient funds')) {
-        errorMessage = 'Fonds insuffisants pour la transaction';
-      } else if (error.message.includes('gas')) {
-        errorMessage = 'Erreur de gas - augmentez la limite de gas';
-      } else if (error.message.includes('user rejected')) {
-        errorMessage = 'Transaction annulée par l\'utilisateur';
-      }
-      
-      toast.error(errorMessage);
-      setIsLoading(false);
-      setCurrentRequestData(null);
-    }
-  };
-
-  // État de chargement global
-  const isSubmitting = isLoading || isWritePending || isConfirming;
 
   return (
     <div className="p-6 bg-zinc-900 text-white rounded-lg space-y-6">
+
+      {/* handleSubmit */}
       <form onSubmit={handleSubmit} className="space-y-6">
         
         {/* Montant */}

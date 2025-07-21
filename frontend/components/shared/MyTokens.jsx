@@ -60,34 +60,6 @@ export function MyTokens() {
   const totalCL = totalSupply ? Number(formatEther(totalSupply)) : 0;
   const canClaim = pendingCL >= 10; // MIN_CLAIM_AMOUNT = 10 CL
 
-  // Gérer le succès du claim
-  useEffect(() => {
-    if (isClaimSuccess) {
-      setIsClaimLoading(false);
-      toast.success(`${pendingCL.toFixed(2)} CL tokens réclamés avec succès!`);
-      
-      // Ajouter à l'historique local
-      const newClaim = { id: Date.now(), amount: pendingCL, timestamp: new Date(), hash: claimHash };
-
-      setClaimHistory(prev => [newClaim, ...prev.slice(0, 4)]); // Garder max 5 entrées
-      
-      // Rafraîchir les données
-      setTimeout(() => {
-        refetchPending();
-        refetchBalance();
-      }, 2000);
-    }
-  }, [isClaimSuccess, pendingCL, claimHash, refetchPending, refetchBalance]);
-
-  // Gérer les erreurs de claim
-  useEffect(() => {
-    if (claimError) {
-      setIsClaimLoading(false);
-      console.error('Erreur claim:', claimError);
-      toast.error(`Erreur lors du claim: ${claimError.message}`);
-    }
-  }, [claimError]);
-
   // Fonction pour effectuer le claim
   const handleClaim = async () => {
     if (!canClaim) {
@@ -125,6 +97,35 @@ export function MyTokens() {
       { action: "Rembourser à temps", reward: "100 CL" }
     ];
   };
+
+    // Gérer le succès du claim
+    useEffect(() => {
+      if (isClaimSuccess) {
+        setIsClaimLoading(false);
+        toast.success(`${pendingCL.toFixed(2)} CL tokens réclamés avec succès!`);
+        
+        // Ajouter à l'historique local
+        const newClaim = { id: Date.now(), amount: pendingCL, timestamp: new Date(), hash: claimHash };
+  
+        setClaimHistory(prev => [newClaim, ...prev.slice(0, 4)]); // Garder max 5 entrées
+        
+        // Rafraîchir les données
+        setTimeout(() => {
+          refetchPending();
+          refetchBalance();
+        }, 2000);
+      }
+    }, [isClaimSuccess, pendingCL, claimHash, refetchPending, refetchBalance]);
+  
+    // Gérer les erreurs de claim
+    useEffect(() => {
+      if (claimError) {
+        setIsClaimLoading(false);
+        console.error('Erreur claim:', claimError);
+        toast.error(`Erreur lors du claim: ${claimError.message}`);
+      }
+    }, [claimError]);
+  
 
   if (!isConnected) {
     return (

@@ -150,75 +150,6 @@ export function RepaidLoans({ refreshTrigger = 0 }) {
     }
   };
 
-  // Charger les prêts remboursés
-  useEffect(() => {
-    const loadRepaidLoans = async () => {
-      if (!userRequestIds || userRequestIds.length === 0) {
-        setRepaidLoans([]);
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        const repaidLoansData = [];
-        
-        for (let i = 0; i < userRequestIds.length; i++) {
-          const requestId = Number(userRequestIds[i]);
-          
-          try {
-            // Vérifier d'abord si le prêt peut être retiré
-            const withdrawInfo = await checkWithdrawEligibility(requestId);
-            
-            // Seulement traiter les prêts qui peuvent vraiment être retirés
-            if (withdrawInfo && withdrawInfo.canWithdraw) {
-              // Récupérer d'abord les détails de la demande
-              const requestData = await fetchRequestDetails(requestId);
-              
-              if (requestData && Number(requestData.status) === 1) {
-                // Demande financée, essayer de récupérer les détails du prêt
-                const loanData = await fetchLoanDetails(requestId);
-                
-                if (loanData) {
-                  const formattedLoan = formatRepaidLoan(requestId, requestData, loanData, withdrawInfo);
-                  if (formattedLoan) {
-                    repaidLoansData.push(formattedLoan);
-                  }
-                } else {
-                  // Créer un objet minimal pour permettre le retrait quand même
-                  const minimalLoan = {
-                    id: Number(requestId),
-                    collateral: `${parseFloat(formatEther(withdrawInfo.collateralAmount)).toFixed(4)} ETH`,
-                    canWithdraw: true,
-                    status: 'Remboursé',
-                    principalFormatted: 'N/A',
-                    totalDueFormatted: 'N/A',
-                    lender: 'N/A',
-                    dueDateFormatted: 'N/A'
-                  };
-                  repaidLoansData.push(minimalLoan);
-                }
-              }
-            }
-          } catch (error) {
-            // Ignorer les erreurs individuelles
-          }
-        }
-
-        setRepaidLoans(repaidLoansData);
-      } catch (error) {
-        toast.error('Erreur lors du chargement des prêts remboursés');
-      }
-      
-      setIsLoading(false);
-    };
-
-    if (userRequestIds && isConnected) {
-      loadRepaidLoans();
-    } else if (!isConnected) {
-      setIsLoading(false);
-    }
-  }, [userRequestIds, address, isConnected, refreshTrigger]);
-
   // Fonction pour retirer le collatéral
   const handleWithdrawCollateral = async (loan) => {
     if (!isConnected) {
@@ -262,6 +193,75 @@ export function RepaidLoans({ refreshTrigger = 0 }) {
       setWithdrawingLoanId(null);
     }
   };
+
+    // Charger les prêts remboursés
+    useEffect(() => {
+      const loadRepaidLoans = async () => {
+        if (!userRequestIds || userRequestIds.length === 0) {
+          setRepaidLoans([]);
+          setIsLoading(false);
+          return;
+        }
+  
+        try {
+          const repaidLoansData = [];
+          
+          for (let i = 0; i < userRequestIds.length; i++) {
+            const requestId = Number(userRequestIds[i]);
+            
+            try {
+              // Vérifier d'abord si le prêt peut être retiré
+              const withdrawInfo = await checkWithdrawEligibility(requestId);
+              
+              // Seulement traiter les prêts qui peuvent vraiment être retirés
+              if (withdrawInfo && withdrawInfo.canWithdraw) {
+                // Récupérer d'abord les détails de la demande
+                const requestData = await fetchRequestDetails(requestId);
+                
+                if (requestData && Number(requestData.status) === 1) {
+                  // Demande financée, essayer de récupérer les détails du prêt
+                  const loanData = await fetchLoanDetails(requestId);
+                  
+                  if (loanData) {
+                    const formattedLoan = formatRepaidLoan(requestId, requestData, loanData, withdrawInfo);
+                    if (formattedLoan) {
+                      repaidLoansData.push(formattedLoan);
+                    }
+                  } else {
+                    // Créer un objet minimal pour permettre le retrait quand même
+                    const minimalLoan = {
+                      id: Number(requestId),
+                      collateral: `${parseFloat(formatEther(withdrawInfo.collateralAmount)).toFixed(4)} ETH`,
+                      canWithdraw: true,
+                      status: 'Remboursé',
+                      principalFormatted: 'N/A',
+                      totalDueFormatted: 'N/A',
+                      lender: 'N/A',
+                      dueDateFormatted: 'N/A'
+                    };
+                    repaidLoansData.push(minimalLoan);
+                  }
+                }
+              }
+            } catch (error) {
+              // Ignorer les erreurs individuelles
+            }
+          }
+  
+          setRepaidLoans(repaidLoansData);
+        } catch (error) {
+          toast.error('Erreur lors du chargement des prêts remboursés');
+        }
+        
+        setIsLoading(false);
+      };
+  
+      if (userRequestIds && isConnected) {
+        loadRepaidLoans();
+      } else if (!isConnected) {
+        setIsLoading(false);
+      }
+    }, [userRequestIds, address, isConnected, refreshTrigger]);
 
   // Gestion du succès des transactions
   useEffect(() => {

@@ -1,7 +1,7 @@
 const { ethers } = require("hardhat");
 
 async function main() {
-  console.log("🚀 Setup présentation ChainLend sur Base fork...");
+  console.log("Setup présentation ChainLend sur Base fork...");
 
   // Adresses Base mainnet 
   const usdcAddress = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"; // USDC Base
@@ -16,8 +16,6 @@ async function main() {
   await ethers.provider.send("hardhat_setBalance", [whaleAddress, "0x1000000000000000000"]); // 1 ETH gas
   const whaleSigner = await ethers.getSigner(whaleAddress);
 
-  console.log("Whale USDC balance:", ethers.formatUnits(await usdc.balanceOf(whaleAddress), 6));
-
   // Distribution d'USDC 
   const accounts = [
     { name: "Borrower", signer: borrower, amount: "50000" },
@@ -28,21 +26,16 @@ async function main() {
 
   for (const account of accounts) {
     const amount = ethers.parseUnits(account.amount, 6);
-    
-    console.log(`Transfer ${account.amount} USDC vers ${account.name}...`);
-    
+  
     const tx = await usdc.connect(whaleSigner).transfer(account.signer.address, amount);
     await tx.wait();
     
     const balance = await usdc.balanceOf(account.signer.address);
-    console.log(`${account.name}: ${ethers.formatUnits(balance, 6)} USDC`);
   }
 
-  // Vérifier ETH (déjà 10k ETH par compte avec Anvil)
-  console.log("\n Soldes ETH :");
+  // Vérifie ETH (déjà 10k ETH par compte avec Anvil)
   for (const account of accounts) {
     const ethBalance = await ethers.provider.getBalance(account.signer.address);
-    console.log(`- ${account.name}: ${ethers.formatEther(ethBalance)} ETH`);
   }
 }
 

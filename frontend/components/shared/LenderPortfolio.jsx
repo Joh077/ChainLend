@@ -156,8 +156,33 @@ export function LenderPortfolio() {
     }
   };
 
-  // Chargement des prêts actifs
-  useEffect(() => {
+  // Fonction pour obtenir la couleur du statut
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'healthy': return 'bg-green-600';
+      case 'monitoring': return 'bg-yellow-600';
+      case 'at-risk': return 'bg-red-600';
+      default: return 'bg-gray-600';
+    }
+  };
+
+  // Fonction pour obtenir le texte du statut
+  const getStatusText = (loan) => {
+    if (!loan.collateral.hasHealthFactor) {
+      return 'Health Factor N/A';
+    }
+    
+    if (loan.collateral.isAtRisk) {
+      return `Danger (${loan.collateral.healthFactor.toFixed(0)}%)`;
+    } else if (loan.collateral.needsMonitoring) {
+      return `À surveiller (${loan.collateral.healthFactor.toFixed(0)}%)`;
+    } else {
+      return `Sain (${loan.collateral.healthFactor.toFixed(0)}%)`;
+    }
+  };
+
+   // Chargement des prêts actifs
+   useEffect(() => {
     const loadActiveLoans = async () => {
       if (!userLoanIds || userLoanIds.length === 0) {
         setActiveLoans([]);
@@ -206,32 +231,7 @@ export function LenderPortfolio() {
       setIsLoading(false);
     }
   }, [userLoanIds, address, isConnected]);
-
-  // Fonction pour obtenir la couleur du statut
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'healthy': return 'bg-green-600';
-      case 'monitoring': return 'bg-yellow-600';
-      case 'at-risk': return 'bg-red-600';
-      default: return 'bg-gray-600';
-    }
-  };
-
-  // Fonction pour obtenir le texte du statut
-  const getStatusText = (loan) => {
-    if (!loan.collateral.hasHealthFactor) {
-      return 'Health Factor N/A';
-    }
-    
-    if (loan.collateral.isAtRisk) {
-      return `Danger (${loan.collateral.healthFactor.toFixed(0)}%)`;
-    } else if (loan.collateral.needsMonitoring) {
-      return `À surveiller (${loan.collateral.healthFactor.toFixed(0)}%)`;
-    } else {
-      return `Sain (${loan.collateral.healthFactor.toFixed(0)}%)`;
-    }
-  };
-
+  
   if (isError) {
     return (
       <Card className="bg-zinc-900 border-zinc-700">
