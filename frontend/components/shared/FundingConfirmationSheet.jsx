@@ -4,8 +4,10 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { contractAddress, usdcAddress, usdcAbi } from '@/constants';
+
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
 import { parseUnits } from 'viem';
+
 import { toast } from 'sonner';
 
 export function FundingConfirmationSheet({ isOpen, onClose, request, onFundingSuccess, contractAbi }) {
@@ -90,9 +92,9 @@ export function FundingConfirmationSheet({ isOpen, onClose, request, onFundingSu
   // Mise à jour de l'étape basée sur l'allowance
   useEffect(() => {
     if (hasEnoughAllowance) {
-      setCurrentStep(2);
+      setCurrentStep(2); // passer directement au financement
     } else {
-      setCurrentStep(1);
+      setCurrentStep(1); // commencer par l'approbation
     }
   }, [hasEnoughAllowance]);
 
@@ -109,7 +111,7 @@ export function FundingConfirmationSheet({ isOpen, onClose, request, onFundingSu
         
         // Refresh de l'allowance
         setTimeout(() => {
-          refetchAllowance();
+          refetchAllowance(); //Vérification que l'approval a bien été enregistrée
         }, 1000);
       } 
       else if (isFunding) {
@@ -118,7 +120,7 @@ export function FundingConfirmationSheet({ isOpen, onClose, request, onFundingSu
           description: `Vous avez financé ${request?.amount} avec succès`
         });
         setIsFunding(false);
-        onFundingSuccess && onFundingSuccess(request?.id);
+        onFundingSuccess && onFundingSuccess(request?.id); //Callback vers le parent
         onClose();
       }
     }

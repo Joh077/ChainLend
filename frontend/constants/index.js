@@ -1,7 +1,7 @@
 // Adresses des contrats déployés sur fork
-export const contractAddress = "0x556ebf3Fa9dc0a43669DF4D7eD0172b1e3d10676";
+export const contractAddress = "0xc9C5f7927998909DF0cD8fBd1BAc3E3Ad205A92f";
 export const usdcAddress = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
-export const clTokenAddress = "0xC26C09918939aA4426Fe7E3bB474ee5ef637d2CD";
+export const clTokenAddress = "0x5dFFb57cd5F9170a26E281D198fEf392c253211c";
 export const ethPriceFeedAddress = "0x5f4ec3df9cbd43714fe2740f5e3616155c5b8419";
 export const usdcPriceFeedAddress = "0x8fffffd4afb6115b954bd326cbe7b4ba576818f6";
 
