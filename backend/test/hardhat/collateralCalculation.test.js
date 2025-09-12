@@ -31,6 +31,7 @@ describe("Collateral Calculation", function () {
         .to.be.revertedWithCustomError(chainLend, "ZeroAmount");
     });
 
+
     it("Should revert when loan amount exceeds maximum", async function () {
       const maxLoanAmount = await chainLend.MAX_LOAN_AMOUNT();
       const excessAmount = maxLoanAmount + 1n;
@@ -83,7 +84,7 @@ describe("Collateral Calculation", function () {
   });
 
   // PRICE REVERT TESTS 
-  
+
   describe("Price Revert", function () {
     let chainLend, ethPriceFeed, usdcPriceFeed;
 
