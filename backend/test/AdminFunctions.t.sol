@@ -53,7 +53,7 @@ contract AdminFunctionsTest is BaseTest {
         
         vm.prank(owner);
         vm.expectEmit(true, false, false, true);
-        emit EmergencyWithdrawal(owner, 500e6);  // ✅ Syntaxe corrigée
+        emit EmergencyWithdrawal(owner, 500e6);  // Syntaxe corrigée
         chainLend.emergencyWithdrawUSDC(owner, 500e6);
         
         assertEq(usdcToken.balanceOf(owner), 500e6);

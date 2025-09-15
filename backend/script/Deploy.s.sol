@@ -7,7 +7,7 @@ import {ChainLend} from "../src/ChainLend.sol";
 import {CLToken} from "../src/CLToken.sol";
 
 contract DeployScript is Script {
-    // Same addresses as your Hardhat deployment
+    // Same addresses as Hardhat deployment
     address constant USDC_BASE = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
     address constant ETH_USD_FEED = 0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70;
     address constant USDC_USD_FEED = 0x7e860098F58bBFC8648a4311b374B1D669a2bc6B;
@@ -20,6 +20,7 @@ contract DeployScript is Script {
         console.log("Account balance:", deployer.balance);
         
         vm.startBroadcast(deployerPrivateKey);
+        
         
         // Deploy CLToken (exactly like your Hardhat script)
         CLToken clToken = new CLToken(deployer);
@@ -34,7 +35,7 @@ contract DeployScript is Script {
             deployer        // Initial owner (same as deployer)
         );
         
-        // Add ChainLend as minter (exactly like your Hardhat script)
+        // Add ChainLend as minter
         clToken.addMinter(address(chainLend));
         
         vm.stopBroadcast();
