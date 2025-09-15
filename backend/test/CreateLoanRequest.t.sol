@@ -9,111 +9,162 @@ contract CreateLoanRequest is BaseTest {
 
   // ========= EVENTS ===========
 
-  event LoanRequestCreated(
-        uint256 indexed requestId, 
-        address indexed borrower,
-        uint256 amountRequested,
-        uint256 requiredCollateral,
-        uint256 interestRate,
-        uint256 duration
-    );
-
-  event CollateralDeposited(
-        uint256 indexed requestId, 
-        address indexed borrower, 
-        uint256 amount, 
-        uint256 totalDeposited
-    );
-  
-  event CLRewardsEarned(address indexed user, uint256 amount, string action);
-
-  // LOAN REQUEST CREATION 
-
-  function test_CreateLoanRequestSuccesfully() external {
-    vm.prank(borrower);
-    uint256 amountRequested = 1000 * 1e6;
-    uint32 interestRate = 500;
-    uint64 duration = 365 * 24 * 60 * 60;
-    uint256 requiredCollateral = chainLend.calculateRequiredCollateral(amountRequested);
-
-    chainLend.createLoanRequest{value: requiredCollateral }(amountRequested, interestRate, duration);
-  }
-
-  function test_StoreLoanRequestDataCorrectly() public {
-    uint256 amountRequested = 1000 * 1e6;
-    uint32 interestRate = 500;
-    uint64 duration = 365 * 24 * 60 * 60;
-    uint256 requiredCollateral = chainLend.calculateRequiredCollateral(amountRequested);
-    vm.prank(borrower);
-    chainLend.createLoanRequest{value: requiredCollateral }(amountRequested, interestRate, duration);
-    
-    IChainLend.LoanRequest memory loanRequest = chainLend.getLoanRequest(1);
-    assertEq(loanRequest.id, 1);
-    assertEq(loanRequest.amountRequested, 1000 * 1e6);
-    assertEq(loanRequest.requiredCollateral, requiredCollateral);
-    assertEq(loanRequest.actualCollateralDeposited, requiredCollateral);
-    assertEq(loanRequest.createdAt, block.timestamp);
-    assertEq(loanRequest.borrower, borrower);
-    assertEq(loanRequest.duration, 365 * 24 * 60 * 60);
-    assertEq(loanRequest.interestRate, 500);
-    assertEq(uint256(loanRequest.status), uint256(IChainLend.RequestStatus.Pending));
-  }
-
-  function test_EmitLoanRequestCreatedEvent() public {
-    
-    uint256 amountRequested = 1000 * 1e6;
-    uint32 interestRate = 500;
-    uint64 duration = 365 * 24 * 60 * 60;
-    uint256 requiredCollateral = chainLend.calculateRequiredCollateral(amountRequested);
-    vm.prank(borrower);
-
-    vm.expectEmit(true, true, false, true);
-    emit LoanRequestCreated(
-      1, 
-      borrower, 
-      amountRequested, 
-      requiredCollateral, 
-      interestRate, 
-      duration
+    event LoanRequestCreated(
+          uint256 indexed requestId, 
+          address indexed borrower,
+          uint256 amountRequested,
+          uint256 requiredCollateral,
+          uint256 interestRate,
+          uint256 duration
       );
 
-    chainLend.createLoanRequest{value: requiredCollateral }(amountRequested, interestRate, duration);
-
-  }
-
-  function test_EmitCollateralDepositedEvent() public {
-    uint256 amountRequested = 1000 * 1e6;
-    uint32 interestRate = 500;
-    uint64 duration = 365 * 24 * 60 * 60;
-    uint256 requiredCollateral = chainLend.calculateRequiredCollateral(amountRequested);
-    vm.prank(borrower);
-
-    vm.expectEmit(true, true, false, true);
-    emit CollateralDeposited(
-      1, 
-      borrower, 
-      requiredCollateral, 
-      requiredCollateral
+    event CollateralDeposited(
+          uint256 indexed requestId, 
+          address indexed borrower, 
+          uint256 amount, 
+          uint256 totalDeposited
       );
-
-    chainLend.createLoanRequest{value: requiredCollateral}(amountRequested, interestRate, duration);
-  }
-
-  function test_EmitCLRewardsEarnedEvent() public {
-    uint256 amountRequested = 1000 * 1e6;
-    uint32 interestRate = 500;
-    uint64 duration = 365 * 24 * 60 * 60;
-    uint256 requiredCollateral = chainLend.calculateRequiredCollateral(amountRequested);
     
+    event CLRewardsEarned(address indexed user, uint256 amount, string action);
 
-    vm.expectEmit(true, false, false, true);
-    emit CLRewardsEarned( 
-      borrower, 
-      chainLend.REWARD_CREATE_REQUEST(), 
-      "Create Request"
-      );
+    // LOAN REQUEST CREATION 
 
-    vm.prank(borrower);
-    chainLend.createLoanRequest{value: requiredCollateral}(amountRequested, interestRate, duration);
-  }
+    function test_CreateLoanRequestSuccesfully() external {
+      vm.prank(borrower);
+      uint256 amountRequested = 1000 * 1e6;
+      uint32 interestRate = 500;
+      uint64 duration = 365 * 24 * 60 * 60;
+      uint256 requiredCollateral = chainLend.calculateRequiredCollateral(amountRequested);
+
+      chainLend.createLoanRequest{value: requiredCollateral }(amountRequested, interestRate, duration);
+    }
+
+    function test_StoreLoanRequestDataCorrectly() public {
+      uint256 amountRequested = 1000 * 1e6;
+      uint32 interestRate = 500;
+      uint64 duration = 365 * 24 * 60 * 60;
+      uint256 requiredCollateral = chainLend.calculateRequiredCollateral(amountRequested);
+      vm.prank(borrower);
+      chainLend.createLoanRequest{value: requiredCollateral }(amountRequested, interestRate, duration);
+      
+      IChainLend.LoanRequest memory loanRequest = chainLend.getLoanRequest(1);
+      assertEq(loanRequest.id, 1);
+      assertEq(loanRequest.amountRequested, 1000 * 1e6);
+      assertEq(loanRequest.requiredCollateral, requiredCollateral);
+      assertEq(loanRequest.actualCollateralDeposited, requiredCollateral);
+      assertEq(loanRequest.createdAt, block.timestamp);
+      assertEq(loanRequest.borrower, borrower);
+      assertEq(loanRequest.duration, 365 * 24 * 60 * 60);
+      assertEq(loanRequest.interestRate, 500);
+      assertEq(uint256(loanRequest.status), uint256(IChainLend.RequestStatus.Pending));
+    }
+
+    function test_EmitLoanRequestCreatedEvent() public {
+      
+      uint256 amountRequested = 1000 * 1e6;
+      uint32 interestRate = 500;
+      uint64 duration = 365 * 24 * 60 * 60;
+      uint256 requiredCollateral = chainLend.calculateRequiredCollateral(amountRequested);
+      vm.prank(borrower);
+
+      vm.expectEmit(true, true, false, true);
+      emit LoanRequestCreated(
+        1, 
+        borrower, 
+        amountRequested, 
+        requiredCollateral, 
+        interestRate, 
+        duration
+        );
+
+      chainLend.createLoanRequest{value: requiredCollateral }(amountRequested, interestRate, duration);
+
+    }
+
+    function test_EmitCollateralDepositedEvent() public {
+      uint256 amountRequested = 1000 * 1e6;
+      uint32 interestRate = 500;
+      uint64 duration = 365 * 24 * 60 * 60;
+      uint256 requiredCollateral = chainLend.calculateRequiredCollateral(amountRequested);
+      vm.prank(borrower);
+
+      vm.expectEmit(true, true, false, true);
+      emit CollateralDeposited(
+        1, 
+        borrower, 
+        requiredCollateral, 
+        requiredCollateral
+        );
+
+      chainLend.createLoanRequest{value: requiredCollateral}(amountRequested, interestRate, duration);
+    }
+
+    function test_EmitCLRewardsEarnedEvent() public {
+      uint256 amountRequested = 1000 * 1e6;
+      uint32 interestRate = 500;
+      uint64 duration = 365 * 24 * 60 * 60;
+      uint256 requiredCollateral = chainLend.calculateRequiredCollateral(amountRequested);
+      
+
+      vm.expectEmit(true, false, false, true);
+      emit CLRewardsEarned( 
+        borrower, 
+        chainLend.REWARD_CREATE_REQUEST(), 
+        "Create Request"
+        );
+
+      vm.prank(borrower);
+      chainLend.createLoanRequest{value: requiredCollateral}(amountRequested, interestRate, duration);
+    }
+
+    function test_IncrementNextRequestID() public {
+      uint256 amountRequested = 1000 * 1e6;
+      uint32 interestRate = 500;
+      uint64 duration = 365 * 24 * 60 * 60;
+      uint256 requiredCollateral = chainLend.calculateRequiredCollateral(amountRequested);
+      
+      uint256 nextIdBefore = chainLend.nextRequestId();
+      assertEq(nextIdBefore, 1);
+      vm.prank(borrower);
+
+      chainLend.createLoanRequest{value: requiredCollateral}(amountRequested, interestRate, duration);
+
+      uint256 nextIdAfter = chainLend.nextRequestId();
+      assertEq(nextIdAfter, nextIdBefore + 1);
+      
+      }
+
+    function test_IncrementTotalActiveRequests() public {
+      uint256 amountRequested = 1000 * 1e6;
+      uint32 interestRate = 500;
+      uint64 duration = 365 * 24 * 60 * 60;
+      uint256 requiredCollateral = chainLend.calculateRequiredCollateral(amountRequested);
+      
+      uint256 totalActiveRequestsBefore = chainLend.totalActiveRequests();
+      assertEq(totalActiveRequestsBefore, 0);
+      vm.prank(borrower);
+
+      chainLend.createLoanRequest{value: requiredCollateral}(amountRequested, interestRate, duration);
+
+      uint256 totalActiveRequestsAfter = chainLend.totalActiveRequests();
+      assertEq(totalActiveRequestsAfter, totalActiveRequestsBefore + 1);
+     
+    }
+
+    function test_UpdateUserRequestCount() public {
+      uint256 amountRequested = 1000 * 1e6;
+      uint32 interestRate = 500;
+      uint64 duration = 365 * 24 * 60 * 60;
+      uint256 requiredCollateral = chainLend.calculateRequiredCollateral(amountRequested);
+      vm.prank(borrower);
+      uint256 userRequestCountBefore = chainLend.userRequestCount(borrower);
+      assertEq(userRequestCountBefore, 0);
+      vm.prank(borrower);
+
+      chainLend.createLoanRequest{value: requiredCollateral}(amountRequested, interestRate, duration);
+      vm.prank(borrower);
+      uint256 userRequestCountAfter = chainLend.userRequestCount(borrower);
+      assertEq(userRequestCountAfter, userRequestCountBefore + 1);
+     
+    }
 }
