@@ -254,5 +254,4 @@ contract CollateralCalculationTest is BaseTest {
 
       assertGt(requiredCollateral, 0);
   }
-
 }
