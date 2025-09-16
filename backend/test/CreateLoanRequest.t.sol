@@ -156,15 +156,187 @@ contract CreateLoanRequest is BaseTest {
       uint32 interestRate = 500;
       uint64 duration = 365 * 24 * 60 * 60;
       uint256 requiredCollateral = chainLend.calculateRequiredCollateral(amountRequested);
-      vm.prank(borrower);
+      
       uint256 userRequestCountBefore = chainLend.userRequestCount(borrower);
       assertEq(userRequestCountBefore, 0);
       vm.prank(borrower);
 
       chainLend.createLoanRequest{value: requiredCollateral}(amountRequested, interestRate, duration);
-      vm.prank(borrower);
+      
       uint256 userRequestCountAfter = chainLend.userRequestCount(borrower);
       assertEq(userRequestCountAfter, userRequestCountBefore + 1);
      
+    }
+
+    function test_AddUserRequestToRequestList() public {    
+      uint256 amountRequested = 1000 * 1e6;
+      uint32 interestRate = 500;
+      uint64 duration = 365 * 24 * 60 * 60;
+      uint256 requiredCollateral = chainLend.calculateRequiredCollateral(amountRequested);
+
+      vm.prank(borrower);
+
+      chainLend.createLoanRequest{value: requiredCollateral}(amountRequested, interestRate, duration);
+      uint256[] memory userRequests = chainLend.getUserRequests(borrower);
+      assertGt(userRequests.length, 0);
+      assertEq(userRequests[0], 1);
+    }
+
+    function test_AccumulateCLRewards() public {
+      uint256 amountRequested = 1000 * 1e6;
+      uint32 interestRate = 500;
+      uint64 duration = 365 * 24 * 60 * 60;
+      uint256 requiredCollateral = chainLend.calculateRequiredCollateral(amountRequested);
+
+      vm.prank(borrower);
+      chainLend.createLoanRequest{value: requiredCollateral}(amountRequested, interestRate, duration);
+
+      uint256 clBalance = chainLend.pendingCLRewards(borrower);
+      assertEq(clBalance, 10 * 1e18);
+    }
+
+    function test_AllowExcessCollateralDeposit() public {
+      uint256 amountRequested = 1000 * 1e6;
+      uint32 interestRate = 500;
+      uint64 duration = 365 * 24 * 60 * 60;
+      uint256 requiredCollateral = chainLend.calculateRequiredCollateral(amountRequested);
+      uint256 excessCollateral = 1 ether;
+
+      vm.prank(borrower);
+      chainLend.createLoanRequest{value: requiredCollateral + excessCollateral}(amountRequested, interestRate, duration);
+      
+      IChainLend.LoanRequest memory request = chainLend.getLoanRequest(1);
+      assertEq(request.actualCollateralDeposited, requiredCollateral + excessCollateral);
+    }
+
+    function test_CreateMultipleRequestsFromSameBorrower() public {
+      uint256 amountRequested = 1000 * 1e6;
+      uint32 interestRate = 500;
+      uint64 duration = 365 * 24 * 60 * 60;
+      uint256 requiredCollateral = chainLend.calculateRequiredCollateral(amountRequested);
+
+      vm.prank(borrower);
+      chainLend.createLoanRequest{value: requiredCollateral}(amountRequested, interestRate, duration);
+      
+      vm.prank(borrower);
+      chainLend.createLoanRequest{value: requiredCollateral}(amountRequested, interestRate, duration);
+      
+      uint256 userRequestsCount = chainLend.userRequestCount(borrower);
+      assertEq(userRequestsCount, 2);
+
+      uint256 requestId = chainLend.nextRequestId();
+      assertEq(requestId, 3);
+
+      uint256 totalActiveRequest = chainLend.totalActiveRequests();
+      assertEq(totalActiveRequest, 2);
+    }
+
+    function test_RevertWhen_AmountRequestedIsZero() public {
+      uint256 amountRequested = 0;
+      uint32 interestRate = 500;
+      uint64 duration = 365 * 24 * 60 * 60;
+      uint256 requiredCollateral = 1 ether;
+
+      vm.prank(borrower);
+      vm.expectRevert(IChainLend.ZeroAmount.selector);
+      chainLend.createLoanRequest{value: requiredCollateral}(amountRequested, interestRate, duration);
+    }
+
+    function test_RevertWhen_ZeroCollateral() public {
+      uint256 amountRequested = 1000 * 1e6;
+      uint32 interestRate = 500;
+      uint64 duration = 365 * 24 * 60 * 60;
+      uint256 requiredCollateral = 0 ether;
+
+      vm.prank(borrower);
+      vm.expectRevert(IChainLend.ZeroAmount.selector);
+      chainLend.createLoanRequest{value: requiredCollateral}(amountRequested, interestRate, duration);
+    }
+
+    function test_RevertWhen_AmountExceedsMaximum() public {
+      uint256 amountRequested = (500000 * 1e6) + 1;
+      uint32 interestRate = 500;
+      uint64 duration = 365 * 24 * 60 * 60;
+      uint256 requiredCollateral = 10 ether;
+
+      vm.prank(borrower);
+      vm.expectRevert(abi.encodeWithSelector(
+        IChainLend.InvalidAmount.selector,
+        amountRequested, 
+        chainLend.MAX_LOAN_AMOUNT()
+      ));
+      chainLend.createLoanRequest{value: requiredCollateral}(amountRequested, interestRate, duration);
+    }
+
+    function test_RevertWhen_InterestRateBelowMinimum() public {
+      uint256 amountRequested = 500000 * 1e6;
+      uint32 interestRate = 400;
+      uint64 duration = 365 * 24 * 60 * 60;
+      uint256 requiredCollateral = 10 ether;
+
+      vm.prank(borrower);
+      vm.expectRevert(abi.encodeWithSelector(
+        IChainLend.InvalidParameter.selector,
+        "interestRate",
+        interestRate
+        ));
+      chainLend.createLoanRequest{value : requiredCollateral}(amountRequested, interestRate, duration);
+    }
+
+    function test_RevertWhen_InterestRateAboveMaximum() public {
+      uint256 amountRequested = 500000 * 1e6;
+      uint32 interestRate = 1600;
+      uint64 duration = 365 * 24 * 60 * 60;
+      uint256 requiredCollateral = 10 ether;
+
+      vm.prank(borrower);
+      vm.expectRevert(abi.encodeWithSelector(
+        IChainLend.InvalidParameter.selector,
+        "interestRate",
+        interestRate
+        ));
+      chainLend.createLoanRequest{value : requiredCollateral}(amountRequested, interestRate, duration);
+    }
+
+    function test_RevertWhen_DurationAboveMaximum() public {
+      uint256 amountRequested = 500000 * 1e6;
+      uint32 interestRate = 500;
+      uint64 duration = 1460 * 24 * 60 * 60;
+      uint256 requiredCollateral = 10 ether;
+
+      vm.prank(borrower);
+      vm.expectRevert(abi.encodeWithSelector(
+        IChainLend.InvalidParameter.selector,
+        "duration",
+        duration
+        ));
+      chainLend.createLoanRequest{value : requiredCollateral}(amountRequested, interestRate, duration);
+    }
+
+    function test_RevertWhen_InsufficientCollateral() public {
+      uint256 amountRequested = 1000 * 1e6;
+      uint32 interestRate = 500;
+      uint64 duration = 365 * 24 * 60 * 60;
+      uint256 requiredCollateral = chainLend.calculateRequiredCollateral(amountRequested);
+      uint256 insufficientValue = requiredCollateral * 99 / 100;
+
+      vm.prank(borrower);
+      vm.expectRevert(abi.encodeWithSelector(
+        IChainLend.InsufficientCollateral.selector,
+        insufficientValue,
+        requiredCollateral
+        ));
+        
+      chainLend.createLoanRequest{value : insufficientValue}(amountRequested, interestRate, duration);
+    }
+
+    function test_AcceptMaximimValidParameters() public {
+      uint256 amountRequested = chainLend.MAX_LOAN_AMOUNT();
+      uint32 interestRate = uint32(chainLend.MAX_INTEREST_RATE());
+      uint64 duration = uint64(chainLend.MAX_LOAN_DURATION());
+      uint256 requiredCollateral = chainLend.calculateRequiredCollateral(amountRequested);
+
+      vm.prank(borrower);
+      chainLend.createLoanRequest{value : requiredCollateral}(amountRequested, interestRate, duration);
     }
 }

@@ -84,8 +84,8 @@ contract BaseTest is Test {
         usdcToken.approve(address(chainLend), type(uint256).max);
 
         // Give ETH to users
-        vm.deal(borrower, 100 ether);
-        vm.deal(liquidator, 100 ether);
+        vm.deal(borrower, 1000 ether);
+        vm.deal(liquidator, 1000 ether);
         
         // Log real prices for verification
         _logRealPrices();
