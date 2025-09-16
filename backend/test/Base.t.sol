@@ -175,10 +175,10 @@ contract BaseTest is Test {
     int256 ethPriceRaw = _getLatestPrice(ethPriceFeed);
     int256 usdcPriceRaw = _getLatestPrice(usdcPriceFeed);
     
-    //console.log("ETH Price (raw):", uint256(ethPriceRaw));  
+    console.log("ETH Price (raw):", uint256(ethPriceRaw));  
     //console.log("ETH Price:", uint256(ethPriceRaw) / 1e8, "USD");
     
-    //console.log("USDC Price (raw):", uint256(usdcPriceRaw)); 
+    console.log("USDC Price (raw):", uint256(usdcPriceRaw)); 
     //console.log("USDC Price (avec decimales):", uint256(usdcPriceRaw), "/ 1e8");
     
     //console.log("Block number:", block.number);
