@@ -187,5 +187,92 @@ contract FundLoanTest is BaseTest {
       assertTrue(found, "Request ID not found in lender's loan list");
     }
 
+    function test_AccumulateCLRewardForLender() public {
+      
+      uint256 clBalanceBefore = chainLend.pendingCLRewards(lender);
+
+      vm.prank(lender);
+      chainLend.fundLoan(requestId);
+
+      assertEq(chainLend.pendingCLRewards(lender), (clBalanceBefore + (chainLend.REWARD_FUND_LOAN())));
+    }
+
+    function test_RevertWhen_BorrowerTriesToFoundOwnRequest() public {
+      vm.prank(borrower);
+      vm.expectRevert(abi.encodeWithSelector(
+        IChainLend.InvalidRequest.selector,
+        requestId,
+        "Cannot fund own request"
+        ));
+      chainLend.fundLoan(requestId);
+    }
+
+    function test_RevertWhen_FundingNonExistentLoan() public {
+      vm.prank(lender);
+      vm.expectRevert(abi.encodeWithSelector(
+        IChainLend.InvalidRequest.selector,
+        999,
+        "Invalid ID range"
+        ));
+      chainLend.fundLoan(999);
+    }
+
+    function test_RevertWhen_FundingAlreadyFundLoan() public {
+
+      vm.prank(lender);
+      chainLend.fundLoan(requestId);
+
+      vm.expectRevert(abi.encodeWithSelector(
+        IChainLend.InvalidRequestStatus.selector,
+        requestId,
+        IChainLend.RequestStatus.Funded,
+        IChainLend.RequestStatus.Pending      
+        ));
+      vm.prank(lender);
+      chainLend.fundLoan(requestId);
+    }
+
+    function test_RevertWhen_FundingCancelledLoan() public {
+
+      vm.prank(borrower);
+      chainLend.cancelLoanRequest(requestId);
+
+      vm.expectRevert(abi.encodeWithSelector(
+        IChainLend.InvalidRequestStatus.selector,
+        requestId,
+        IChainLend.RequestStatus.Cancelled,
+        IChainLend.RequestStatus.Pending      
+        ));
+      vm.prank(lender);
+      chainLend.fundLoan(requestId);
+    }
+
+    function test_RevertWhen_LenderHasInsufficientUSDCBalance() public {
+      
+      address poorLender = makeAddr("poorLender");
+      deal(address(usdcToken), poorLender, 100e6, true);
+
+      vm.prank(poorLender);
+      usdcToken.approve(address(chainLend), type(uint256).max);
+
+      vm.expectRevert();
+      vm.prank(poorLender);
+      chainLend.fundLoan(requestId);
+    }
+
+    function test_RevertWhen_LenderHasInsufficientUSDCAllowance() public {
+      
+      address poorLender = makeAddr("poorLender");
+      deal(address(usdcToken), poorLender, 1000e6, true);
+
+      vm.prank(poorLender);
+      usdcToken.approve(address(chainLend), 100e6);
+
+      vm.expectRevert("ERC20: insufficient allowance");
+      vm.prank(poorLender);
+      chainLend.fundLoan(requestId);
+    }
+
     
+
 }
