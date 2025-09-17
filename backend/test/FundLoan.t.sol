@@ -273,6 +273,110 @@ contract FundLoanTest is BaseTest {
       chainLend.fundLoan(requestId);
     }
 
-    
+    function test_RevertWhen_InvalidRequestID() public {
+    vm.expectRevert(abi.encodeWithSelector(
+        IChainLend.InvalidRequest.selector,
+        0,
+        "Invalid ID range"
+    ));
+    vm.prank(lender);
+    chainLend.fundLoan(0);
+}
+
+// ========== INTEREST CALCULATION TESTS ==========
+
+function test_HandleMinimumInterestRateAndDuration() public {
+    uint256 amountRequested = 1000e6;
+    uint32 minInterestRate = chainLend.MIN_INTEREST_RATE();
+    uint64 minDuration = chainLend.MIN_LOAN_DURATION();
+    uint256 requiredCollateral = chainLend.calculateRequiredCollateral(amountRequested);
+
+    vm.prank(borrower);
+    chainLend.createLoanRequest{value: requiredCollateral}(
+        amountRequested,
+        minInterestRate,
+        minDuration
+    );
+
+    vm.prank(lender);
+    chainLend.fundLoan(2); // Second request ID
+
+    IChainLend.ActiveLoan memory activeLoan = chainLend.getActiveLoan(2);
+    assertGt(activeLoan.interestAmount, 0);
+}
+
+function test_HandleMaximumInterestRateAndDuration() public {
+    uint256 amountRequested = 1000e6;
+    uint32 maxInterestRate = chainLend.MAX_INTEREST_RATE();
+    uint64 maxDuration = chainLend.MAX_LOAN_DURATION();
+    uint256 requiredCollateral = chainLend.calculateRequiredCollateral(amountRequested);
+
+    vm.deal(borrower, borrower.balance + requiredCollateral);
+    vm.prank(borrower);
+    chainLend.createLoanRequest{value: requiredCollateral}(
+        amountRequested,
+        maxInterestRate,
+        maxDuration
+    );
+
+    vm.prank(lender);
+    chainLend.fundLoan(2);
+
+    IChainLend.ActiveLoan memory activeLoan = chainLend.getActiveLoan(2);
+    assertGt(activeLoan.interestAmount, 0);
+    assertGt(activeLoan.totalAmountDue, amountRequested);
+}
+
+    function test_RevertWhen_InvalidRequestID() public {
+    vm.expectRevert(abi.encodeWithSelector(
+        IChainLend.InvalidRequest.selector,
+        0,
+        "Invalid ID range"
+    ));
+    vm.prank(lender);
+    chainLend.fundLoan(0);
+}
+
+function test_HandleMinimumInterestRateAndDuration() public {
+    uint256 amountRequested = 1000e6;
+    uint32 minInterestRate = uint32(chainLend.MIN_INTEREST_RATE());
+    uint64 minDuration = uint64(chainLend.MIN_LOAN_DURATION());
+    uint256 collateralNeeded = chainLend.calculateRequiredCollateral(amountRequested);
+
+    vm.prank(borrower);
+    chainLend.createLoanRequest{value: collateralNeeded}(
+        amountRequested,
+        minInterestRate,
+        minDuration
+    );
+
+    vm.prank(lender);
+    chainLend.fundLoan(2);
+
+    IChainLend.ActiveLoan memory activeLoan = chainLend.getActiveLoan(2);
+    assertGt(activeLoan.interestAmount, 0);
+}
+
+function test_HandleMaximumInterestRateAndDuration() public {
+    uint256 amountRequested = 1000e6;
+    uint32 maxInterestRate = uint32(chainLend.MAX_INTEREST_RATE());
+    uint64 maxDuration = uint64(chainLend.MAX_LOAN_DURATION());
+    uint256 collateralNeeded = chainLend.calculateRequiredCollateral(amountRequested);
+
+    vm.deal(borrower, borrower.balance + collateralNeeded);
+    vm.prank(borrower);
+    chainLend.createLoanRequest{value: collateralNeeded}(
+        amountRequested,
+        maxInterestRate,
+        maxDuration
+    );
+
+    vm.prank(lender);
+    chainLend.fundLoan(2);
+
+    IChainLend.ActiveLoan memory activeLoan = chainLend.getActiveLoan(2);
+    assertGt(activeLoan.interestAmount, 0);
+    assertGt(activeLoan.totalAmountDue, amountRequested);
+}
 
 }
