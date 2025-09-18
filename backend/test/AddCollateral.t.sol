@@ -97,4 +97,71 @@ contract AddCollateralTest is BaseTest {
     assertEq(contractBalanceAfter, contractBalanceBefore + 2 ether );
 
   }
+
+  function test_RevertWhen_ZeroAmount() public {
+
+    vm.expectRevert(IChainLend.ZeroAmount.selector);
+
+    vm.prank(borrower);
+    chainLend.addCollateral{value : 0}(requestId);
+  }
+
+  function test_RevertWhen_Unauthorized() public {
+
+    vm.deal(lender, 10 ether);
+
+    vm.expectRevert(abi.encodeWithSelector(
+      IChainLend.Unauthorized.selector,
+      lender
+      ));
+
+    vm.prank(lender);
+    chainLend.addCollateral{value : 1 ether}(requestId);
+  }
+
+  function test_RevertWhen_InvalidIdRange() public {
+    
+    vm.expectRevert(abi.encodeWithSelector(
+      IChainLend.InvalidLoan.selector,
+      99,
+      "Invalid ID range"
+      ));
+
+     vm.prank(borrower);
+     chainLend.addCollateral{value: 1 ether}(99);
+  }
+
+  function test_RevertWhen_LoanNotFound() public {
+
+    vm.prank(borrower);
+    chainLend.createLoanRequest{value: requiredCollateral}(
+        500e6,  
+        800,      
+        30 days 
+    );
+
+    vm.expectRevert(abi.encodeWithSelector(
+        IChainLend.InvalidLoan.selector,
+        2, 
+        "Loan not found"
+    ));
+    
+    vm.prank(borrower);
+    chainLend.addCollateral{value: 1 ether}(2);
+}
+
+  function test_RevertWhen_LoanNotActive() public {
+
+    vm.prank(borrower);
+    chainLend.repayLoan(requestId);
+
+    vm.expectRevert(abi.encodeWithSelector(
+      IChainLend.InvalidLoan.selector,
+      requestId,
+      "Loan not active"
+      ));
+
+    vm.prank(borrower);
+    chainLend.addCollateral{value: 3 ether}(requestId);
+  }
 }
