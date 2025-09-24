@@ -1,7 +1,7 @@
 // Adresses des contrats déployés sur localhost
-export const contractAddress = "0xa5100dFD6C966aC60a8E497a3545B49B12Dd45BC";
+export const contractAddress = "0x9A7Ef5422F4f847A6Ed106D5d049eB1E202a09f0";
 export const usdcAddress = "0x294A36De92F6750714C36D9b4102288191ECcA97";
-export const clTokenAddress = "0xe539FFF59EB1C136fabb1bc45bE9D441ec0F3899";
+export const clTokenAddress = "0x5DfC7104A4b3d35cDe727987F122A1Ef4391CcB2";
 export const ethPriceFeedAddress = "0x516eF4320e30ea017B0EAd80F6C650C5e0d9Db26";
 export const usdcPriceFeedAddress = "0xeA083Bd4fAfF8aec92123DC7c246aB0E7886A429";
 

@@ -544,7 +544,8 @@ contract ChainLend is IChainLend, Ownable, ReentrancyGuard {
         activeLoansCount = totalActiveLoans;
         
         for (uint256 i = 1; i < nextRequestId; i++) {
-            if (requests[i].status == RequestStatus.Funded) {
+            if (requests[i].status == RequestStatus.Funded &&
+                activeLoans[i].status == LoanStatus.Active) {
                 totalVolumeUSDC += requests[i].amountRequested;
             }
         }
